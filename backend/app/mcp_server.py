@@ -6,10 +6,12 @@ from typing import Optional
 import logging
 
 from fastmcp import FastMCP
+from fastmcp.server.auth import OAuthProvider, AccessToken
 from fastmcp.server.dependencies import get_http_request
 from sqlmodel import Session, select
 
 from app.core.database import engine
+from app.core.config import settings
 from app.auth.models import OAuthToken
 from app.boards.models import CreatedBy, Attachment
 from app.boards import service
@@ -28,9 +30,50 @@ MCP_INSTRUCTIONS = """
 — Никогда не оставляй обсуждённое невнесённым в доску.
 """
 
+
+class BoardyOAuthProvider(OAuthProvider):
+    """Custom OAuth provider that validates tokens against our database."""
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Verify a bearer token against our database."""
+        with Session(engine) as session:
+            oauth_token = session.exec(
+                select(OAuthToken).where(OAuthToken.access_token == token)
+            ).first()
+
+            if not oauth_token:
+                logger.warning(f"Token not found in database")
+                return None
+
+            # Handle timezone-naive datetime from DB
+            expires_at = oauth_token.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+            if expires_at < datetime.now(timezone.utc):
+                logger.warning(f"Token expired")
+                return None
+
+            # Return AccessToken with scopes
+            return AccessToken(
+                token=token,
+                client_id=oauth_token.client_id,
+                scopes=oauth_token.scope.split() if oauth_token.scope else [],
+                expires_at=int(expires_at.timestamp()),
+            )
+
+
+# OAuth provider with custom token verification
+oauth_provider = BoardyOAuthProvider(
+    base_url=settings.app_url,
+    issuer_url=settings.app_url,
+    required_scopes=["board:read", "board:write"],
+)
+
 mcp = FastMCP(
     name="Boardy",
     instructions=MCP_INSTRUCTIONS,
+    auth=oauth_provider,
 )
 
 

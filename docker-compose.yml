@@ -27,6 +27,8 @@ services:
     environment:
       DATABASE_URL: postgresql://boardy:boardy@postgres:5432/boardy
       DEBUG: "true"
+      APP_URL: https://stat-justice-kerry-slow.trycloudflare.com
+      MCP_SERVER_URL: https://stat-justice-kerry-slow.trycloudflare.com/mcp
     ports:
       - "8000:8000"
     volumes:

@@ -39,9 +39,10 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(boards_router, prefix="/api/v1", tags=["boards"])
 
-# OAuth 2.1 endpoints
+# OAuth 2.1 endpoints (both /auth/* for web UI and /* for MCP)
 app.include_router(discovery_router)  # /.well-known/oauth-authorization-server
 app.include_router(oauth_router, prefix="/auth", tags=["oauth"])
+app.include_router(oauth_router, tags=["oauth-mcp"])  # /authorize, /token for MCP
 
 # MCP server
 app.mount("/mcp", mcp_app)

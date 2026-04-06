@@ -459,7 +459,11 @@ def token(
         if auth_code.used:
             return oauth_error_response("invalid_grant", "Authorization code already used")
 
-        if auth_code.expires_at < datetime.now(timezone.utc):
+        # Handle both naive and aware datetimes from DB
+        expires_at = auth_code.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
             return oauth_error_response("invalid_grant", "Authorization code expired")
 
         if auth_code.client_id != client_id:

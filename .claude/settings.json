@@ -17,10 +17,17 @@
     "deny": []
   },
   "hooks": {
-    "preCommit": [
+    "PreToolUse": [
       {
-        "command": "bash -c \"! grep -r --include='*.py' -n '^[[:space:]]*print(' backend/app && echo 'No print() found'\"",
-        "description": "Check no print() in backend (use logging instead)"
+        "matcher": "Bash",
+        "if": "Bash(git commit *)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FOUND=$(grep -r --include=\"*.py\" \"^[[:space:]]*print(\" backend/app 2>/dev/null | head -5); if [ ! -z \"$FOUND\" ]; then echo \"Found print() statements:\" >&2; echo \"$FOUND\" >&2; exit 2; fi'",
+            "timeout": 30
+          }
+        ]
       }
     ]
   }

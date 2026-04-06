@@ -11,14 +11,11 @@ interface Props {
   onCardClick: (card: Card) => void;
 }
 
-const PRIORITY_COLORS: Record<string, string> = {
-  low: "bg-slate-100 text-slate-600",
-  medium: "bg-blue-100 text-blue-700",
-  high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
-};
-
-export default function KanbanColumn({ column, boardId, onAddCard, onCardClick }: Props) {
+export default function KanbanColumn({
+  column,
+  onAddCard,
+  onCardClick,
+}: Props) {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,21 +31,23 @@ export default function KanbanColumn({ column, boardId, onAddCard, onCardClick }
   }
 
   return (
-    <div className="flex flex-col w-72 shrink-0 bg-muted/40 rounded-xl border">
+    <div className="flex flex-col w-80 shrink-0 bg-white rounded-2xl shadow-startup border border-landing-outline-variant/10">
       {/* Column header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">{column.name}</h3>
-          <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-landing-outline-variant/20">
+        <div className="flex items-center gap-3">
+          <h3 className="font-semibold text-landing-on-background">
+            {column.name}
+          </h3>
+          <span className="text-xs font-medium text-landing-secondary bg-landing-surface-container-low rounded-full px-2.5 py-1">
             {column.cards.length}
           </span>
         </div>
         <button
           onClick={() => setAdding(true)}
-          className="text-muted-foreground hover:text-foreground transition-colors"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-landing-secondary hover:bg-landing-primary-fixed hover:text-landing-primary transition-all"
           title="Add card"
         >
-          <Plus size={16} />
+          <Plus size={18} />
         </button>
       </div>
 
@@ -58,8 +57,8 @@ export default function KanbanColumn({ column, boardId, onAddCard, onCardClick }
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 p-2 space-y-2 min-h-[60px] transition-colors ${
-              snapshot.isDraggingOver ? "bg-primary/5" : ""
+            className={`flex-1 p-3 space-y-3 min-h-[100px] transition-colors rounded-b-2xl ${
+              snapshot.isDraggingOver ? "bg-landing-primary-fixed/30" : ""
             }`}
           >
             {column.cards.map((card, index) => (
@@ -86,27 +85,37 @@ export default function KanbanColumn({ column, boardId, onAddCard, onCardClick }
 
       {/* Add card form */}
       {adding ? (
-        <form onSubmit={handleAdd} className="p-2 border-t space-y-2">
+        <form
+          onSubmit={handleAdd}
+          className="p-3 border-t border-landing-outline-variant/20 space-y-3"
+        >
           <textarea
             autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Card title…"
+            placeholder="Card title..."
             rows={2}
-            className="w-full px-2 py-1.5 rounded border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full px-4 py-3 rounded-xl border border-landing-outline-variant/30 bg-landing-surface-container-low text-sm resize-none focus:outline-none focus:ring-2 focus:ring-landing-primary/30 focus:border-landing-primary transition-all"
           />
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-1.5 bg-primary text-primary-foreground rounded text-xs font-medium disabled:opacity-50"
+              className="flex-1 py-2.5 bg-landing-primary text-white rounded-full text-sm font-semibold disabled:opacity-50 hover:shadow-lg hover:shadow-landing-primary/20 transition-all flex items-center justify-center"
             >
-              {loading ? <Loader2 size={12} className="animate-spin mx-auto" /> : "Add card"}
+              {loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                "Add card"
+              )}
             </button>
             <button
               type="button"
-              onClick={() => { setAdding(false); setTitle(""); }}
-              className="px-2 py-1.5 rounded border text-xs hover:bg-muted transition-colors"
+              onClick={() => {
+                setAdding(false);
+                setTitle("");
+              }}
+              className="px-4 py-2.5 rounded-full border border-landing-outline-variant text-sm font-medium text-landing-secondary hover:border-landing-primary/50 transition-all"
             >
               Cancel
             </button>
