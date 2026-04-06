@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose*)",
+      "Bash(docker-compose*)",
+      "Bash(uvicorn*)",
+      "Bash(npm*)",
+      "Bash(alembic*)",
+      "Bash(pytest*)",
+      "Bash(cd backend*)",
+      "Bash(cd frontend*)",
+      "Bash(curl*localhost*)",
+      "Bash(ls*)",
+      "Bash(cat*)",
+      "Bash(mkdir*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "preCommit": [
+      {
+        "command": "bash -c \"! grep -r --include='*.py' -n '^[[:space:]]*print(' backend/app && echo 'No print() found'\"",
+        "description": "Check no print() in backend (use logging instead)"
+      }
+    ]
+  }
+}
