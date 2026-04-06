@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, LogOut, LayoutDashboard, Loader2, LayoutGrid } from "lucide-react";
-import { boardsApi } from "@/lib/api";
+import { Plus, LogOut, LayoutDashboard, Loader2, LayoutGrid, Mail, Check, X } from "lucide-react";
+import { boardsApi, invitesApi, authApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
-import type { Board } from "@/types";
+import type { Board, BoardInvite, BoardRole } from "@/types";
+
+const ROLE_COLORS: Record<BoardRole, string> = {
+  owner: "bg-purple-100 text-purple-700",
+  editor: "bg-blue-100 text-blue-700",
+  viewer: "bg-gray-100 text-gray-700",
+};
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -18,12 +24,32 @@ export default function DashboardPage() {
     queryFn: async () => (await boardsApi.list()).data,
   });
 
+  const { data: pendingInvites = [] } = useQuery<BoardInvite[]>({
+    queryKey: ["my-invites"],
+    queryFn: async () => (await invitesApi.my()).data,
+  });
+
   const createMutation = useMutation({
     mutationFn: (name: string) => boardsApi.create(name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["boards"] });
       setNewName("");
       setCreating(false);
+    },
+  });
+
+  const acceptInviteMutation = useMutation({
+    mutationFn: (token: string) => invitesApi.accept(token),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-invites"] });
+      qc.invalidateQueries({ queryKey: ["boards"] });
+    },
+  });
+
+  const declineInviteMutation = useMutation({
+    mutationFn: (token: string) => invitesApi.decline(token),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-invites"] });
     },
   });
 
@@ -50,7 +76,9 @@ export default function DashboardPage() {
               {user?.email}
             </span>
             <button
-              onClick={() => {
+              onClick={async () => {
+                await authApi.logout().catch(() => {});
+                qc.clear(); // Clear all cached data on logout
                 logout();
                 navigate("/");
               }}
@@ -81,6 +109,54 @@ export default function DashboardPage() {
             <Plus size={18} /> New board
           </button>
         </div>
+
+        {/* Pending invites */}
+        {pendingInvites.length > 0 && (
+          <div className="mb-8 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl border border-blue-100 p-6">
+            <h3 className="font-semibold text-landing-on-background mb-4 flex items-center gap-2">
+              <Mail size={20} className="text-blue-500" />
+              Pending Invitations ({pendingInvites.length})
+            </h3>
+            <div className="space-y-3">
+              {pendingInvites.map((invite) => (
+                <div
+                  key={invite.id}
+                  className="flex items-center justify-between bg-white rounded-xl p-4 shadow-sm"
+                >
+                  <div>
+                    <p className="font-medium text-landing-on-background">
+                      {invite.board_name}
+                    </p>
+                    <p className="text-sm text-landing-secondary">
+                      Invited by {invite.invited_by_email} as{" "}
+                      <span className={`px-2 py-0.5 rounded text-xs ${ROLE_COLORS[invite.role]}`}>
+                        {invite.role}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => acceptInviteMutation.mutate(invite.token)}
+                      disabled={acceptInviteMutation.isPending}
+                      className="flex items-center gap-1 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
+                    >
+                      <Check size={16} />
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => declineInviteMutation.mutate(invite.token)}
+                      disabled={declineInviteMutation.isPending}
+                      className="flex items-center gap-1 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                    >
+                      <X size={16} />
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* New board form */}
         {creating && (
@@ -158,6 +234,11 @@ export default function DashboardPage() {
                       className="text-landing-primary"
                     />
                   </div>
+                  {board.my_role && board.my_role !== "owner" && (
+                    <span className={`px-2 py-1 rounded text-xs ${ROLE_COLORS[board.my_role]}`}>
+                      {board.my_role}
+                    </span>
+                  )}
                 </div>
                 <h3 className="font-semibold text-lg text-landing-on-background group-hover:text-landing-primary transition-colors mb-2">
                   {board.name}

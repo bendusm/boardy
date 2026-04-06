@@ -2,16 +2,18 @@ import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
-import { ArrowLeft, Loader2, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, Loader2, LayoutDashboard, Users } from "lucide-react";
 import { boardsApi, cardsApi } from "@/lib/api";
 import type { BoardFull, Card } from "@/types";
 import KanbanColumn from "@/components/kanban/KanbanColumn";
+import BoardMembersModal from "@/components/BoardMembersModal";
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [showMembers, setShowMembers] = useState(false);
 
   const { data: board, isLoading } = useQuery<BoardFull>({
     queryKey: ["board", boardId],
@@ -107,6 +109,15 @@ export default function BoardPage() {
           <h1 className="text-lg font-semibold text-landing-on-background truncate">
             {board.name}
           </h1>
+          <div className="ml-auto">
+            <button
+              onClick={() => setShowMembers(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-landing-secondary hover:text-landing-primary hover:bg-landing-surface-container rounded-lg transition-colors"
+            >
+              <Users size={18} />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+          </div>
         </nav>
       </header>
 
@@ -166,6 +177,16 @@ export default function BoardPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Members modal */}
+      {showMembers && (
+        <BoardMembersModal
+          boardId={board.id}
+          boardName={board.name}
+          isOwner={board.my_role === "owner"}
+          onClose={() => setShowMembers(false)}
+        />
       )}
     </div>
   );

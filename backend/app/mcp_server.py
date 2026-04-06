@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 from app.core.database import engine
 from app.core.config import settings
 from app.auth.models import OAuthToken
-from app.boards.models import CreatedBy, Attachment
+from app.boards.models import CreatedBy, Attachment, BoardRole
 from app.boards import service
 
 logger = logging.getLogger(__name__)
@@ -84,10 +84,12 @@ class MCPContext:
     """Context extracted from OAuth token."""
     user_id: str
     board_id: str
+    role: BoardRole
+    scopes: list[str]
 
 
 def get_mcp_context() -> MCPContext:
-    """Extract user_id and board_id from Bearer token."""
+    """Extract user_id, board_id, role, and scopes from Bearer token."""
     request = get_http_request()
     auth_header = request.headers.get("authorization", "")
 
@@ -107,27 +109,50 @@ def get_mcp_context() -> MCPContext:
         if not oauth_token:
             raise ValueError("Invalid or expired token")
 
+        # Get user's role on the board
+        role = service.get_user_board_role(session, oauth_token.board_id, oauth_token.user_id)
+        if not role:
+            raise ValueError("No access to this board")
+
+        # Parse scopes from token
+        scopes = oauth_token.scope.split() if oauth_token.scope else []
+
         return MCPContext(
             user_id=oauth_token.user_id,
             board_id=oauth_token.board_id,
+            role=role,
+            scopes=scopes,
         )
+
+
+def require_editor(ctx: MCPContext) -> None:
+    """Raise if user is not at least editor."""
+    if ctx.role == BoardRole.viewer:
+        raise ValueError("Viewers cannot perform this action")
+
+
+def require_write_scope(ctx: MCPContext) -> None:
+    """Raise if token doesn't have board:write scope."""
+    if "board:write" not in ctx.scopes:
+        raise ValueError("This operation requires board:write scope")
 
 
 # ─── MCP Tools ──────────────────────────────────────────────────────────
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def list_boards() -> list[dict]:
-    """List all boards owned by the current user.
+    """List boards accessible via current token.
 
-    Returns a list of boards with their id, name, and slug.
+    Returns only the board this token is scoped to (for security isolation).
     """
     ctx = get_mcp_context()
     with Session(engine) as session:
-        boards = service.get_boards(session, ctx.user_id)
-        return [
-            {"id": b.id, "name": b.name, "slug": b.slug}
-            for b in boards
-        ]
+        # Security: Only return the board this token is authorized for
+        board_result = service.get_board_with_access(session, ctx.board_id, ctx.user_id)
+        if not board_result:
+            return []
+        board, _ = board_result
+        return [{"id": board.id, "name": board.name, "slug": board.slug}]
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -141,10 +166,14 @@ def get_board(board_id: str) -> dict:
     """
     ctx = get_mcp_context()
     with Session(engine) as session:
-        board = service.get_board(session, board_id, ctx.user_id)
-        if not board:
+        # Security: Verify board_id matches token scope
+        if board_id != ctx.board_id:
+            raise ValueError(f"Board {board_id} not accessible with this token")
+
+        board_result = service.get_board_with_access(session, board_id, ctx.user_id)
+        if not board_result:
             raise ValueError(f"Board {board_id} not found or not accessible")
-        return service.get_board_full(session, board_id)
+        return service.get_board_full(session, board_id, ctx.user_id)
 
 
 @mcp.tool(annotations={"destructiveHint": False})
@@ -167,10 +196,22 @@ def create_card(
     Returns the created card details.
     """
     ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
     with Session(engine) as session:
-        board = service.get_board(session, board_id, ctx.user_id)
-        if not board:
+        # Security: Verify board_id matches token scope
+        if board_id != ctx.board_id:
+            raise ValueError(f"Board {board_id} not accessible with this token")
+
+        board_result = service.get_board_with_access(session, board_id, ctx.user_id)
+        if not board_result:
             raise ValueError(f"Board {board_id} not found or not accessible")
+
+        # Security: Verify column belongs to this board
+        columns = service.get_columns(session, board_id)
+        valid_column_ids = {col.id for col in columns}
+        if column_id not in valid_column_ids:
+            raise ValueError(f"Column {column_id} not found in board {board_id}")
 
         card = service.create_card(
             session,
@@ -196,7 +237,12 @@ def update_card(
     card_id: str,
     title: Optional[str] = None,
     description: Optional[str] = None,
-    priority: Optional[str] = None
+    priority: Optional[str] = None,
+    status: Optional[str] = None,
+    color: Optional[str] = None,
+    assignee_id: Optional[str] = None,
+    due_date: Optional[str] = None,
+    labels: Optional[list[str]] = None
 ) -> dict:
     """Update an existing card.
 
@@ -205,32 +251,51 @@ def update_card(
         title: New title (optional)
         description: New description (optional)
         priority: New priority - low, medium, high, critical (optional)
+        status: New status - open, in_progress, blocked, done (optional)
+        color: New color - gray, red, orange, yellow, green, blue, purple, pink (optional)
+        assignee_id: User ID to assign card to (optional, use empty string to unassign)
+        due_date: Due date in ISO format YYYY-MM-DD (optional, use empty string to clear)
+        labels: List of label strings (optional)
 
     Returns the updated card details.
     """
+    import json
+    from datetime import datetime as dt
+
     ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        board = service.get_board(session, card.board_id, ctx.user_id)
-        if not board:
-            raise ValueError("Card not accessible")
+        # Security: Verify card belongs to token-scoped board
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
 
-        updated = service.update_card(
-            session, card,
-            title=title,
-            description=description,
-            priority=priority,
-        )
+        # Handle special cases
+        update_kwargs = {}
+        if title is not None:
+            update_kwargs['title'] = title
+        if description is not None:
+            update_kwargs['description'] = description
+        if priority is not None:
+            update_kwargs['priority'] = priority
+        if status is not None:
+            update_kwargs['status'] = status
+        if color is not None:
+            update_kwargs['color'] = color
+        if assignee_id is not None:
+            update_kwargs['assignee_id'] = assignee_id if assignee_id else None
+        if due_date is not None:
+            update_kwargs['due_date'] = dt.fromisoformat(due_date) if due_date else None
+        if labels is not None:
+            update_kwargs['labels'] = json.dumps(labels) if labels else None
+
+        updated = service.update_card(session, card, **update_kwargs)
         logger.info(f"MCP updated card {card_id}")
-        return {
-            "id": updated.id,
-            "title": updated.title,
-            "description": updated.description,
-            "priority": updated.priority.value if hasattr(updated.priority, 'value') else updated.priority,
-        }
+        return service.card_to_dict(session, updated)
 
 
 @mcp.tool(annotations={"destructiveHint": False})
@@ -244,14 +309,22 @@ def move_card(card_id: str, to_column_id: str) -> dict:
     Returns the moved card details.
     """
     ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        board = service.get_board(session, card.board_id, ctx.user_id)
-        if not board:
-            raise ValueError("Card not accessible")
+        # Security: Verify card belongs to token-scoped board
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
+
+        # Security: Verify target column belongs to the same board
+        columns = service.get_columns(session, card.board_id)
+        valid_column_ids = {col.id for col in columns}
+        if to_column_id not in valid_column_ids:
+            raise ValueError(f"Column {to_column_id} not found in board")
 
         moved = service.move_card(session, card, to_column_id, position=0)
         logger.info(f"MCP moved card {card_id} to column {to_column_id}")
@@ -273,13 +346,18 @@ def add_comment(card_id: str, text: str) -> dict:
     Returns the created comment details.
     """
     ctx = get_mcp_context()
+    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        board = service.get_board(session, card.board_id, ctx.user_id)
-        if not board:
+        # Security: Verify card belongs to token-scoped board
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
+
+        board_result = service.get_board_with_access(session, card.board_id, ctx.user_id)
+        if not board_result:
             raise ValueError("Card not accessible")
 
         comment = service.add_comment(
@@ -309,14 +387,16 @@ def attach_file(card_id: str, file_url: str, filename: str) -> dict:
     Returns the created attachment details.
     """
     ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        board = service.get_board(session, card.board_id, ctx.user_id)
-        if not board:
-            raise ValueError("Card not accessible")
+        # Security: Verify card belongs to token-scoped board
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
 
         attachment = Attachment(
             card_id=card_id,
@@ -350,19 +430,191 @@ def close_card(card_id: str, reason: Optional[str] = None) -> dict:
     Returns the closed card details.
     """
     ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        board = service.get_board(session, card.board_id, ctx.user_id)
-        if not board:
-            raise ValueError("Card not accessible")
+        # Security: Verify card belongs to token-scoped board
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
 
         closed = service.close_card(session, card, reason=reason)
         logger.info(f"MCP closed card {card_id}")
+        return service.card_to_dict(session, closed)
+
+
+@mcp.tool(annotations={"destructiveHint": True})
+def delete_card(card_id: str) -> dict:
+    """Permanently delete a card.
+
+    WARNING: This action cannot be undone. Consider using archive_card instead.
+
+    Args:
+        card_id: The card to delete
+
+    Returns confirmation of deletion.
+    """
+    ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
+    with Session(engine) as session:
+        card = service.get_card(session, card_id)
+        if not card:
+            raise ValueError(f"Card {card_id} not found")
+
+        # Security: Verify card belongs to token-scoped board
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
+
+        card_title = card.title
+        service.delete_card(session, card)
+        logger.info(f"MCP deleted card {card_id}")
         return {
-            "id": closed.id,
-            "title": closed.title,
-            "status": closed.status.value if hasattr(closed.status, 'value') else closed.status,
+            "deleted": True,
+            "card_id": card_id,
+            "title": card_title,
         }
+
+
+@mcp.tool(annotations={"destructiveHint": False})
+def archive_card(card_id: str) -> dict:
+    """Archive a card (soft delete).
+
+    Archived cards are hidden from the board but can be restored.
+
+    Args:
+        card_id: The card to archive
+
+    Returns the archived card details.
+    """
+    ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
+    with Session(engine) as session:
+        card = service.get_card(session, card_id)
+        if not card:
+            raise ValueError(f"Card {card_id} not found")
+
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
+
+        archived = service.archive_card(session, card)
+        logger.info(f"MCP archived card {card_id}")
+        return service.card_to_dict(session, archived)
+
+
+@mcp.tool(annotations={"destructiveHint": False})
+def duplicate_card(card_id: str, to_column_id: Optional[str] = None) -> dict:
+    """Duplicate a card.
+
+    Creates a copy of the card with "(copy)" suffix in title.
+
+    Args:
+        card_id: The card to duplicate
+        to_column_id: Target column ID (optional, defaults to same column)
+
+    Returns the new card details.
+    """
+    ctx = get_mcp_context()
+    require_editor(ctx)
+    require_write_scope(ctx)
+    with Session(engine) as session:
+        card = service.get_card(session, card_id)
+        if not card:
+            raise ValueError(f"Card {card_id} not found")
+
+        if card.board_id != ctx.board_id:
+            raise ValueError("Card not accessible with this token")
+
+        new_card = service.duplicate_card(session, card, to_column_id)
+        logger.info(f"MCP duplicated card {card_id} -> {new_card.id}")
+        return service.card_to_dict(session, new_card)
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+def search_cards(
+    board_id: str,
+    column_id: Optional[str] = None,
+    assignee_id: Optional[str] = None,
+    color: Optional[str] = None,
+    priority: Optional[str] = None,
+    status: Optional[str] = None,
+    label: Optional[str] = None,
+    created_by: Optional[str] = None,
+    include_archived: bool = False,
+) -> list[dict]:
+    """Search and filter cards on a board.
+
+    Args:
+        board_id: The board to search
+        column_id: Filter by column ID (optional)
+        assignee_id: Filter by assignee user ID (optional)
+        color: Filter by color - gray, red, orange, yellow, green, blue, purple, pink (optional)
+        priority: Filter by priority - low, medium, high, critical (optional)
+        status: Filter by status - open, in_progress, blocked, done (optional)
+        label: Filter by label (optional)
+        created_by: Filter by creator - "user" or "claude" (optional)
+        include_archived: Include archived cards (default False)
+
+    Returns list of matching cards.
+    """
+    ctx = get_mcp_context()
+    with Session(engine) as session:
+        # Security: Verify board_id matches token scope
+        if board_id != ctx.board_id:
+            raise ValueError(f"Board {board_id} not accessible with this token")
+
+        board_result = service.get_board_with_access(session, board_id, ctx.user_id)
+        if not board_result:
+            raise ValueError(f"Board {board_id} not found or not accessible")
+
+        cards = service.search_cards(
+            session,
+            board_id=board_id,
+            column_id=column_id,
+            assignee_id=assignee_id,
+            color=color,
+            priority=priority,
+            status=status,
+            label=label,
+            created_by=created_by,
+            include_archived=include_archived,
+        )
+        logger.info(f"MCP searched cards on board {board_id}, found {len(cards)}")
+        return [service.card_to_dict(session, c) for c in cards]
+
+
+@mcp.tool(annotations={"readOnlyHint": True})
+def list_users(board_id: str) -> list[dict]:
+    """List all users who have access to a board.
+
+    Useful for getting user IDs for assignee_id filter.
+
+    Args:
+        board_id: The board ID
+
+    Returns list of users with id, name, email, and role.
+    """
+    ctx = get_mcp_context()
+    with Session(engine) as session:
+        if board_id != ctx.board_id:
+            raise ValueError(f"Board {board_id} not accessible with this token")
+
+        # Get all board members
+        from app.auth.models import User
+        members = service.get_board_members(session, board_id)
+        users = []
+        for member, email in members:
+            user = session.get(User, member.user_id)
+            if user:
+                users.append({
+                    "id": user.id,
+                    "name": user.name or user.email.split("@")[0],
+                    "email": user.email,
+                    "role": member.role.value if hasattr(member.role, 'value') else member.role,
+                })
+
+        return users

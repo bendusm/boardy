@@ -5,7 +5,7 @@ from app.core.database import get_session
 from app.core.deps import get_current_user
 from app.auth.models import User
 from .models import (
-    BoardCreate, BoardRead,
+    BoardCreate, BoardRead, BoardReadWithRole, BoardRole,
     ColumnCreate, ColumnRead,
     CardCreate, CardUpdate, CardRead, CardMove,
     CommentCreate, CommentRead,
@@ -15,11 +15,9 @@ from . import service
 router = APIRouter()
 
 
-def _check_board(session, board_id, user):
-    board = service.get_board(session, board_id, user.id)
-    if not board:
-        raise HTTPException(status_code=404, detail="Board not found")
-    return board
+def _check_board(session, board_id, user, required_role: BoardRole = BoardRole.viewer):
+    """Check board access with role requirement."""
+    return service.check_board_access(session, board_id, user.id, required_role)
 
 
 def _check_card(session, card_id):
@@ -31,12 +29,23 @@ def _check_card(session, card_id):
 
 # ─── Boards ──────────────────────────────────────────────────────────
 
-@router.get("/boards", response_model=list[BoardRead])
+@router.get("/boards", response_model=list[BoardReadWithRole])
 def list_boards(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    return service.get_boards(session, current_user.id)
+    boards_with_roles = service.get_boards(session, current_user.id)
+    return [
+        BoardReadWithRole(
+            id=board.id,
+            name=board.name,
+            slug=board.slug,
+            owner_id=board.owner_id,
+            my_role=role,
+            created_at=board.created_at,
+        )
+        for board, role in boards_with_roles
+    ]
 
 
 @router.post("/boards", response_model=BoardRead, status_code=status.HTTP_201_CREATED)
@@ -55,7 +64,7 @@ def get_board(
     current_user: User = Depends(get_current_user),
 ):
     board = _check_board(session, board_id, current_user)
-    return service.get_board_full(session, board.id)
+    return service.get_board_full(session, board.id, current_user.id)
 
 
 @router.delete("/boards/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -64,7 +73,7 @@ def delete_board(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    board = _check_board(session, board_id, current_user)
+    board = _check_board(session, board_id, current_user, BoardRole.owner)
     service.delete_board(session, board)
 
 
@@ -87,7 +96,7 @@ def create_column(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    _check_board(session, board_id, current_user)
+    _check_board(session, board_id, current_user, BoardRole.editor)
     return service.create_column(session, board_id, body.name, body.position)
 
 
@@ -101,6 +110,8 @@ def list_cards(
     current_user: User = Depends(get_current_user),
 ):
     _check_board(session, board_id, current_user)
+    # Security: Validate column belongs to this board (prevents IDOR)
+    service.validate_column_in_board(session, board_id, column_id)
     return service.get_cards(session, column_id)
 
 
@@ -112,7 +123,9 @@ def create_card(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    _check_board(session, board_id, current_user)
+    _check_board(session, board_id, current_user, BoardRole.editor)
+    # Security: Validate column belongs to this board (prevents IDOR)
+    service.validate_column_in_board(session, board_id, column_id)
     return service.create_card(
         session,
         board_id=board_id,
@@ -131,7 +144,7 @@ def update_card(
     current_user: User = Depends(get_current_user),
 ):
     card = _check_card(session, card_id)
-    _check_board(session, card.board_id, current_user)
+    _check_board(session, card.board_id, current_user, BoardRole.editor)
     return service.update_card(
         session, card,
         title=body.title,
@@ -149,7 +162,7 @@ def move_card(
     current_user: User = Depends(get_current_user),
 ):
     card = _check_card(session, card_id)
-    _check_board(session, card.board_id, current_user)
+    _check_board(session, card.board_id, current_user, BoardRole.editor)
     return service.move_card(session, card, body.to_column_id, body.position)
 
 
@@ -160,7 +173,7 @@ def delete_card(
     current_user: User = Depends(get_current_user),
 ):
     card = _check_card(session, card_id)
-    _check_board(session, card.board_id, current_user)
+    _check_board(session, card.board_id, current_user, BoardRole.editor)
     session.delete(card)
     session.commit()
 

@@ -1,25 +1,32 @@
 import axios from "axios";
 
+const CSRF_STORAGE_KEY = "boardy_csrf";
+
 export const api = axios.create({
   baseURL: "/api/v1",
   headers: { "Content-Type": "application/json" },
+  withCredentials: true, // Send httpOnly cookies automatically
 });
 
-// Attach JWT token from localStorage
+// Attach CSRF token for state-changing requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("boardy_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const method = config.method?.toUpperCase();
+  if (method && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    const csrfToken = sessionStorage.getItem(CSRF_STORAGE_KEY);
+    if (csrfToken) {
+      config.headers["X-CSRF-Token"] = csrfToken;
+    }
   }
   return config;
 });
 
-// Auto-logout on 401
+// Auto-logout on 401 (except for /auth/me which is used to check session)
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem("boardy_token");
+    const isAuthCheck = err.config?.url?.includes("/auth/me");
+    if (err.response?.status === 401 && !isAuthCheck) {
+      sessionStorage.removeItem(CSRF_STORAGE_KEY);
       window.location.href = "/login";
     }
     return Promise.reject(err);
@@ -33,6 +40,7 @@ export const authApi = {
     api.post("/auth/register", { email, password }),
   login: (email: string, password: string) =>
     api.post("/auth/login", { email, password }),
+  logout: () => api.post("/auth/logout"),
   me: () => api.get("/auth/me"),
 };
 
@@ -57,4 +65,27 @@ export const cardsApi = {
   comments: (cardId: string) => api.get(`/cards/${cardId}/comments`),
   addComment: (cardId: string, text: string) =>
     api.post(`/cards/${cardId}/comments`, { text }),
+};
+
+// ─── Members ──────────────────────────────────────────────────────
+
+export const membersApi = {
+  list: (boardId: string) => api.get(`/boards/${boardId}/members`),
+  updateRole: (boardId: string, memberId: string, role: string) =>
+    api.patch(`/boards/${boardId}/members/${memberId}`, { role }),
+  remove: (boardId: string, memberId: string) =>
+    api.delete(`/boards/${boardId}/members/${memberId}`),
+};
+
+// ─── Invites ──────────────────────────────────────────────────────
+
+export const invitesApi = {
+  create: (boardId: string, email: string, role: string) =>
+    api.post(`/boards/${boardId}/invites`, { email, role }),
+  listPending: (boardId: string) => api.get(`/boards/${boardId}/invites`),
+  cancel: (boardId: string, inviteId: string) =>
+    api.delete(`/boards/${boardId}/invites/${inviteId}`),
+  my: () => api.get("/invites/my"),
+  accept: (token: string) => api.post(`/invites/${token}/accept`),
+  decline: (token: string) => api.post(`/invites/${token}/decline`),
 };

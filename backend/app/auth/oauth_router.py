@@ -2,14 +2,19 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlencode, urlparse
 import secrets
 import hashlib
+import hmac
 import base64
+import html
 import json
 import logging
+import time
 
-from fastapi import APIRouter, Depends, Form, Query, HTTPException
+from fastapi import APIRouter, Depends, Form, Query, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from app.core.rate_limit import token_rate_limiter, auth_code_rate_limiter
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -17,7 +22,7 @@ from app.core.database import get_session
 from app.core.config import settings
 from .models import OAuthClient, OAuthAuthCode, OAuthToken, User
 from .service import authenticate_user
-from app.boards.service import get_boards, get_board
+from app.boards.service import get_boards, get_board, get_board_with_access
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,64 @@ class TokenResponse(BaseModel):
     expires_in: int
     refresh_token: Optional[str] = None
     scope: str
+
+
+# ─── CSRF Session Token ────────────────────────────────────────────────
+
+SESSION_TOKEN_MAX_AGE = 600  # 10 minutes
+
+
+def create_session_token(user_id: str) -> str:
+    """Create a signed session token binding user_id to the OAuth flow.
+
+    Token format: base64(user_id:timestamp:signature)
+    Security: Uses full HMAC-SHA256 output (256 bits) for collision resistance.
+    """
+    timestamp = str(int(time.time()))
+    payload = f"{user_id}:{timestamp}"
+    # Security: Use full HMAC output (64 hex chars = 256 bits)
+    signature = hmac.new(
+        settings.secret_key.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    token = f"{payload}:{signature}"
+    return base64.urlsafe_b64encode(token.encode()).decode()
+
+
+def verify_session_token(token: str, expected_user_id: str) -> bool:
+    """Verify session token is valid and matches expected user_id.
+
+    Security: Uses constant-time comparison to prevent timing attacks.
+    """
+    try:
+        decoded = base64.urlsafe_b64decode(token.encode()).decode()
+        parts = decoded.split(":", 2)  # Split into max 3 parts (user_id:timestamp:signature)
+        if len(parts) != 3:
+            return False
+
+        user_id, timestamp, signature = parts
+
+        # Verify user_id matches
+        if user_id != expected_user_id:
+            return False
+
+        # Verify not expired
+        token_time = int(timestamp)
+        if time.time() - token_time > SESSION_TOKEN_MAX_AGE:
+            return False
+
+        # Security: Use full HMAC output and constant-time comparison
+        payload = f"{user_id}:{timestamp}"
+        expected_sig = hmac.new(
+            settings.secret_key.encode(),
+            payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        return hmac.compare_digest(signature, expected_sig)
+    except Exception:
+        return False
 
 
 # ─── HTML Templates ─────────────────────────────────────────────────────
@@ -366,6 +429,7 @@ BOARD_SELECTION_TEMPLATE = """<!DOCTYPE html>
             <input type="hidden" name="code_challenge" value="{code_challenge}">
             <input type="hidden" name="code_challenge_method" value="{code_challenge_method}">
             <input type="hidden" name="user_id" value="{user_id}">
+            <input type="hidden" name="session_token" value="{session_token}">
 
             <h3>Select a board to share:</h3>
             {boards_html}
@@ -404,11 +468,69 @@ def oauth_error_redirect(
     description: str,
     state: Optional[str] = None
 ) -> RedirectResponse:
-    """Redirect with OAuth error params."""
-    params = f"error={error}&error_description={description}"
+    """Redirect with OAuth error params.
+
+    Security: All parameters are URL-encoded to prevent parameter injection attacks.
+    """
+    params = {"error": error, "error_description": description}
     if state:
-        params += f"&state={state}"
-    return RedirectResponse(f"{redirect_uri}?{params}", status_code=302)
+        params["state"] = state
+    return RedirectResponse(f"{redirect_uri}?{urlencode(params)}", status_code=302)
+
+
+def validate_scope(requested_scope: str, client_scope: str) -> bool:
+    """Validate that requested scopes are a subset of client's registered scopes.
+
+    Security: Prevents scope escalation attacks where clients request more permissions
+    than they were registered with.
+    """
+    requested = set(requested_scope.split())
+    allowed = set(client_scope.split())
+    return requested.issubset(allowed)
+
+
+# Allowed redirect URI patterns for OAuth callbacks
+# Security: Restricts OAuth callbacks to trusted domains only
+# Format: (scheme, hostname, port or None for default)
+ALLOWED_REDIRECT_ORIGINS = [
+    ("https", "claude.ai", None),
+    ("http", "localhost", None),  # Any port on localhost
+    ("http", "127.0.0.1", None),  # Any port on 127.0.0.1
+]
+
+
+def is_allowed_redirect_uri(uri: str) -> bool:
+    """Check if redirect URI is from an allowed origin.
+
+    Security: Prevents OAuth token interception via malicious redirect URIs.
+    Uses proper URL parsing to prevent bypasses like:
+    - https://claude.ai.attacker.com (subdomain attack)
+    - http://localhost@attacker.com (userinfo attack)
+    """
+    try:
+        parsed = urlparse(uri)
+    except Exception:
+        return False
+
+    # Reject URLs with userinfo (user:pass@host attack vector)
+    if parsed.username or parsed.password:
+        return False
+
+    # Must have scheme and hostname
+    if not parsed.scheme or not parsed.hostname:
+        return False
+
+    for allowed_scheme, allowed_host, allowed_port in ALLOWED_REDIRECT_ORIGINS:
+        if parsed.scheme != allowed_scheme:
+            continue
+        if parsed.hostname != allowed_host:
+            continue
+        # If allowed_port is None, accept any port; otherwise must match exactly
+        if allowed_port is not None and parsed.port != allowed_port:
+            continue
+        return True
+
+    return False
 
 
 # ─── Discovery Endpoint ─────────────────────────────────────────────────
@@ -422,11 +544,13 @@ def oauth_metadata():
         "authorization_endpoint": f"{base_url}/auth/authorize",
         "token_endpoint": f"{base_url}/auth/token",
         "registration_endpoint": f"{base_url}/auth/register",
+        "revocation_endpoint": f"{base_url}/auth/revoke",
         "scopes_supported": ["board:read", "board:write"],
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+        "revocation_endpoint_auth_methods_supported": ["client_secret_post"],
     }
 
 
@@ -441,10 +565,13 @@ def register_client(
     if not request.redirect_uris:
         raise HTTPException(400, "redirect_uris is required")
 
-    # Validate redirect URIs (must be HTTPS, except localhost)
+    # Security: Validate redirect URIs against whitelist
     for uri in request.redirect_uris:
-        if not uri.startswith("https://") and "localhost" not in uri:
-            raise HTTPException(400, f"Invalid redirect_uri: {uri} (must be HTTPS)")
+        if not is_allowed_redirect_uri(uri):
+            raise HTTPException(
+                400,
+                f"Invalid redirect_uri: {uri}. Only claude.ai and localhost are allowed."
+            )
 
     client_id = secrets.token_urlsafe(16)
     client_secret = secrets.token_urlsafe(32)
@@ -475,6 +602,7 @@ def register_client(
 
 @oauth_router.get("/authorize", response_class=HTMLResponse)
 def authorize_get(
+    request: Request,
     client_id: str = Query(...),
     redirect_uri: str = Query(...),
     response_type: str = Query(...),
@@ -485,6 +613,9 @@ def authorize_get(
     session: Session = Depends(get_session),
 ):
     """Display authorization page (login or board selection)."""
+    # Security: Rate limit authorization attempts
+    auth_code_rate_limiter.check(request)
+
     # Validate response_type
     if response_type != "code":
         return oauth_error_redirect(
@@ -512,15 +643,24 @@ def authorize_get(
     # Validate redirect_uri
     registered_uris = json.loads(client.redirect_uris)
     if redirect_uri not in registered_uris:
+        # Security: Don't redirect to unregistered URI - return error response instead
+        return oauth_error_response(
+            "invalid_request",
+            "redirect_uri not registered for this client",
+            400
+        )
+
+    # Security: Validate requested scope against client's registered scope
+    if not validate_scope(scope, client.scope):
         return oauth_error_redirect(
-            redirect_uri, "invalid_request",
-            "redirect_uri not registered for this client", state
+            redirect_uri, "invalid_scope",
+            "Requested scope exceeds client registration", state
         )
 
     # Show login form (user not authenticated yet in this flow)
     return HTMLResponse(LOGIN_PAGE_TEMPLATE.format(
         client_id=client_id,
-        client_name=client.client_name,
+        client_name=html.escape(client.client_name),
         redirect_uri=redirect_uri,
         response_type=response_type,
         state=state,
@@ -533,6 +673,7 @@ def authorize_get(
 
 @oauth_router.post("/authorize")
 def authorize_post(
+    request: Request,
     client_id: str = Form(...),
     redirect_uri: str = Form(...),
     response_type: str = Form(...),
@@ -544,16 +685,35 @@ def authorize_post(
     password: Optional[str] = Form(None),
     board_id: Optional[str] = Form(None),
     user_id: Optional[str] = Form(None),
+    session_token: Optional[str] = Form(None),
     session: Session = Depends(get_session),
 ):
     """Process authorization (login or board selection)."""
+    # Security: Rate limit authorization attempts (includes login form submissions)
+    auth_code_rate_limiter.check(request)
+
     # Get client
     client = session.exec(
         select(OAuthClient).where(OAuthClient.client_id == client_id)
     ).first()
     if not client:
+        # Security: Don't redirect to potentially malicious URI
+        return oauth_error_response("invalid_client", "Unknown client_id", 400)
+
+    # Validate redirect_uri is registered
+    registered_uris = json.loads(client.redirect_uris)
+    if redirect_uri not in registered_uris:
+        return oauth_error_response(
+            "invalid_request",
+            "redirect_uri not registered for this client",
+            400
+        )
+
+    # Security: Validate requested scope
+    if not validate_scope(scope, client.scope):
         return oauth_error_redirect(
-            redirect_uri, "invalid_client", "Unknown client_id", state
+            redirect_uri, "invalid_scope",
+            "Requested scope exceeds client registration", state
         )
 
     # Case 1: User submitted login form
@@ -562,7 +722,7 @@ def authorize_post(
         if not user:
             return HTMLResponse(LOGIN_PAGE_TEMPLATE.format(
                 client_id=client_id,
-                client_name=client.client_name,
+                client_name=html.escape(client.client_name),
                 redirect_uri=redirect_uri,
                 response_type=response_type,
                 state=state,
@@ -573,23 +733,26 @@ def authorize_post(
             ))
 
         # User authenticated, show board selection
-        boards = get_boards(session, user.id)
-        if not boards:
+        boards_with_roles = get_boards(session, user.id)
+        if not boards_with_roles:
             boards_html = '<p class="no-boards">You have no boards. Create one first.</p>'
         else:
             boards_html = ""
-            for i, board in enumerate(boards):
+            for i, (board, role) in enumerate(boards_with_roles):
                 checked = "checked" if i == 0 else ""
                 boards_html += f'''
                 <label class="board-option">
-                    <input type="radio" name="board_id" value="{board.id}" {checked}>
-                    <span class="board-name">{board.name}</span>
+                    <input type="radio" name="board_id" value="{html.escape(board.id)}" {checked}>
+                    <span class="board-name">{html.escape(board.name)}</span>
                 </label>
                 '''
 
+        # Generate signed session token to prevent CSRF/tampering
+        session_token = create_session_token(user.id)
+
         return HTMLResponse(BOARD_SELECTION_TEMPLATE.format(
             client_id=client_id,
-            client_name=client.client_name,
+            client_name=html.escape(client.client_name),
             redirect_uri=redirect_uri,
             response_type=response_type,
             state=state,
@@ -597,18 +760,27 @@ def authorize_post(
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             user_id=user.id,
+            session_token=session_token,
             boards_html=boards_html,
         ))
 
     # Case 2: User selected a board
     if user_id and board_id:
-        # Verify user owns the board
-        board = get_board(session, board_id, user_id)
-        if not board:
+        # Security: Verify session token to prevent CSRF/user_id tampering
+        if not session_token or not verify_session_token(session_token, user_id):
+            return oauth_error_redirect(
+                redirect_uri, "access_denied",
+                "Invalid or expired session. Please try again.", state
+            )
+
+        # Verify user has access to the board (owner or member)
+        board_result = get_board_with_access(session, board_id, user_id)
+        if not board_result:
             return oauth_error_redirect(
                 redirect_uri, "access_denied",
                 "Board not found or not accessible", state
             )
+        board, user_role = board_result
 
         # Generate authorization code
         code = secrets.token_urlsafe(32)
@@ -649,6 +821,7 @@ def authorize_post(
 
 @oauth_router.post("/token")
 def token(
+    request: Request,
     grant_type: str = Form(...),
     code: Optional[str] = Form(None),
     redirect_uri: Optional[str] = Form(None),
@@ -659,6 +832,9 @@ def token(
     session: Session = Depends(get_session),
 ):
     """Exchange authorization code for tokens."""
+    # Security: Rate limit by IP + client_id
+    token_rate_limiter.check(request, key_suffix=client_id)
+
     # Validate client credentials
     client = session.exec(
         select(OAuthClient).where(
@@ -704,6 +880,12 @@ def token(
         # Verify PKCE
         if not verify_pkce(code_verifier, auth_code.code_challenge):
             return oauth_error_response("invalid_grant", "Invalid code_verifier")
+
+        # Security: Re-verify user still has board access before issuing token
+        board_result = get_board_with_access(session, auth_code.board_id, auth_code.user_id)
+        if not board_result:
+            return oauth_error_response("invalid_grant", "Board no longer accessible")
+        board, _ = board_result
 
         # Mark code as used
         auth_code.used = True
@@ -781,3 +963,63 @@ def token(
             "unsupported_grant_type",
             f"Grant type '{grant_type}' not supported"
         )
+
+
+# ─── Token Revocation (RFC 7009) ────────────────────────────────────────
+
+@oauth_router.post("/revoke")
+def revoke_token(
+    token: str = Form(...),
+    token_type_hint: Optional[str] = Form(None),
+    client_id: str = Form(...),
+    client_secret: str = Form(...),
+    session: Session = Depends(get_session)
+):
+    """Revoke an access or refresh token (RFC 7009).
+
+    Security: Allows users/clients to invalidate tokens that may be compromised.
+    """
+    # Authenticate client
+    client = session.exec(
+        select(OAuthClient).where(OAuthClient.client_id == client_id)
+    ).first()
+
+    if not client or client.client_secret != client_secret:
+        # RFC 7009: Return 200 even on invalid client to prevent enumeration
+        logger.warning(f"Token revocation: invalid client {client_id}")
+        return JSONResponse(content={}, status_code=200)
+
+    # Try to find and delete the token
+    # Check access_token first, then refresh_token
+    oauth_token = None
+
+    if token_type_hint == "refresh_token":
+        # Hint says it's a refresh token - check that first
+        oauth_token = session.exec(
+            select(OAuthToken).where(OAuthToken.refresh_token == token)
+        ).first()
+        if not oauth_token:
+            oauth_token = session.exec(
+                select(OAuthToken).where(OAuthToken.access_token == token)
+            ).first()
+    else:
+        # Default: check access_token first
+        oauth_token = session.exec(
+            select(OAuthToken).where(OAuthToken.access_token == token)
+        ).first()
+        if not oauth_token:
+            oauth_token = session.exec(
+                select(OAuthToken).where(OAuthToken.refresh_token == token)
+            ).first()
+
+    if oauth_token:
+        # Verify the token belongs to this client
+        if oauth_token.client_id == client_id:
+            session.delete(oauth_token)
+            session.commit()
+            logger.info(f"Revoked token for user {oauth_token.user_id}, client {client_id}")
+        else:
+            logger.warning(f"Token revocation: client mismatch for token")
+
+    # RFC 7009: Always return 200, even if token wasn't found (prevents enumeration)
+    return JSONResponse(content={}, status_code=200)

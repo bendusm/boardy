@@ -7,6 +7,7 @@ from app.core.database import create_db_and_tables
 from app.auth.router import router as auth_router
 from app.auth.oauth_router import discovery_router, oauth_router
 from app.boards.router import router as boards_router
+from app.boards.members_router import router as members_router
 from app.mcp_server import mcp
 
 # Get MCP HTTP app for mounting
@@ -32,12 +33,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", settings.app_url],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(boards_router, prefix="/api/v1", tags=["boards"])
+app.include_router(members_router, prefix="/api/v1", tags=["members"])
 
 # OAuth 2.1 endpoints (both /auth/* for web UI and /* for MCP)
 app.include_router(discovery_router)  # /.well-known/oauth-authorization-server

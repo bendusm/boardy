@@ -9,12 +9,18 @@ class User(SQLModel, table=True):
 
     id: str = Field(default_factory=ulid_field, primary_key=True)
     email: str = Field(unique=True, index=True)
+    name: Optional[str] = None  # display name
     hashed_password: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Serializable representation (без пароля)
     def to_dict(self):
-        return {"id": self.id, "email": self.email, "created_at": self.created_at.isoformat()}
+        return {
+            "id": self.id,
+            "email": self.email,
+            "name": self.name or self.email.split("@")[0],
+            "created_at": self.created_at.isoformat(),
+        }
 
 
 # ─── OAuth 2.1 models ───────────────────────────────────────────────
@@ -60,3 +66,18 @@ class OAuthToken(SQLModel, table=True):
     scope: str
     expires_at: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class TokenBlacklist(SQLModel, table=True):
+    """Blacklisted JWT tokens for logout invalidation.
+
+    Security: Stores invalidated tokens until they would have expired naturally.
+    Should be cleaned up periodically to remove expired entries.
+    """
+    __tablename__ = "token_blacklist"
+
+    id: str = Field(default_factory=ulid_field, primary_key=True)
+    token_jti: str = Field(unique=True, index=True)  # JWT ID or hash of token
+    user_id: str = Field(index=True)
+    expires_at: datetime  # When this token would have expired
+    blacklisted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
