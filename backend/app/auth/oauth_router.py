@@ -56,32 +56,140 @@ class TokenResponse(BaseModel):
 # ─── HTML Templates ─────────────────────────────────────────────────────
 
 LOGIN_PAGE_TEMPLATE = """<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Boardy - Sign In</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,400;1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {{ box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-               max-width: 400px; margin: 60px auto; padding: 20px; background: #f9fafb; }}
-        .card {{ background: white; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
-        h2 {{ margin: 0 0 8px 0; color: #111827; }}
-        .subtitle {{ color: #6b7280; margin-bottom: 24px; }}
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            background: #fafaf9;
+            color: #1a1c1b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }}
+        .header {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 40px;
+            margin-top: 40px;
+        }}
+        .logo {{
+            width: 32px;
+            height: 32px;
+            background: #c24e2c;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .logo svg {{ width: 20px; height: 20px; color: white; }}
+        .brand {{
+            font-family: 'Newsreader', serif;
+            font-style: italic;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1c1b;
+        }}
+        .card {{
+            background: white;
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.1);
+            border: 1px solid rgba(219, 193, 185, 0.1);
+            width: 100%;
+            max-width: 420px;
+        }}
+        h2 {{
+            font-family: 'Newsreader', serif;
+            font-style: italic;
+            font-size: 32px;
+            font-weight: 400;
+            margin-bottom: 8px;
+            color: #1a1c1b;
+        }}
+        .subtitle {{
+            color: #645d56;
+            margin-bottom: 32px;
+            font-size: 15px;
+            line-height: 1.5;
+        }}
+        .subtitle strong {{ color: #c24e2c; }}
+        label {{
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1c1b;
+            margin-bottom: 8px;
+        }}
         input[type="email"], input[type="password"] {{
-            width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #d1d5db;
-            border-radius: 8px; font-size: 16px; }}
-        input:focus {{ outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }}
-        button {{ width: 100%; padding: 12px; background: #2563eb; color: white;
-                 border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }}
-        button:hover {{ background: #1d4ed8; }}
-        .error {{ background: #fef2f2; color: #dc2626; padding: 12px; border-radius: 8px;
-                 margin-bottom: 16px; }}
+            width: 100%;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(219, 193, 185, 0.3);
+            border-radius: 12px;
+            font-size: 15px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #f4f3f1;
+            transition: all 0.2s;
+        }}
+        input:focus {{
+            outline: none;
+            border-color: #c24e2c;
+            box-shadow: 0 0 0 3px rgba(194, 78, 44, 0.15);
+            background: white;
+        }}
+        input::placeholder {{ color: #88726c; }}
+        button {{
+            width: 100%;
+            padding: 16px;
+            background: #c24e2c;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 8px;
+        }}
+        button:hover {{
+            box-shadow: 0 8px 20px rgba(194, 78, 44, 0.3);
+            transform: scale(1.02);
+        }}
+        .error {{
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 14px 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border: 1px solid #fecaca;
+        }}
     </style>
 </head>
 <body>
+    <div class="header">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+            </svg>
+        </div>
+        <span class="brand">Boardy</span>
+    </div>
     <div class="card">
-        <h2>Sign in to Boardy</h2>
-        <p class="subtitle"><strong>{client_name}</strong> wants to access your boards.</p>
+        <h2>Welcome back</h2>
+        <p class="subtitle"><strong>{client_name}</strong> wants to access your boards</p>
         {error_html}
         <form method="POST">
             <input type="hidden" name="client_id" value="{client_id}">
@@ -91,43 +199,164 @@ LOGIN_PAGE_TEMPLATE = """<!DOCTYPE html>
             <input type="hidden" name="scope" value="{scope}">
             <input type="hidden" name="code_challenge" value="{code_challenge}">
             <input type="hidden" name="code_challenge_method" value="{code_challenge_method}">
-            <input type="email" name="email" placeholder="Email" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Sign In</button>
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="you@example.com" required>
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="••••••••" required>
+            <button type="submit">Sign in</button>
         </form>
     </div>
 </body>
 </html>"""
 
 BOARD_SELECTION_TEMPLATE = """<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>Boardy - Authorize</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,400;1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {{ box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-               max-width: 500px; margin: 60px auto; padding: 20px; background: #f9fafb; }}
-        .card {{ background: white; padding: 32px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
-        h2 {{ margin: 0 0 8px 0; color: #111827; }}
-        .scope {{ color: #6b7280; margin-bottom: 24px; font-size: 14px; }}
-        .scope code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }}
-        h3 {{ font-size: 14px; color: #374151; margin-bottom: 12px; }}
-        .board-option {{ display: flex; align-items: center; padding: 16px;
-                        border: 2px solid #e5e7eb; margin-bottom: 12px; border-radius: 8px; cursor: pointer; }}
-        .board-option:hover {{ border-color: #93c5fd; }}
-        .board-option input[type="radio"] {{ margin-right: 12px; }}
-        .board-name {{ font-weight: 500; color: #111827; }}
-        button {{ width: 100%; padding: 14px; background: #2563eb; color: white;
-                 border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 8px; }}
-        button:hover {{ background: #1d4ed8; }}
-        .no-boards {{ color: #6b7280; text-align: center; padding: 20px; }}
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            background: #fafaf9;
+            color: #1a1c1b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }}
+        .header {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 40px;
+            margin-top: 40px;
+        }}
+        .logo {{
+            width: 32px;
+            height: 32px;
+            background: #c24e2c;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .logo svg {{ width: 20px; height: 20px; color: white; }}
+        .brand {{
+            font-family: 'Newsreader', serif;
+            font-style: italic;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1c1b;
+        }}
+        .card {{
+            background: white;
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.1);
+            border: 1px solid rgba(219, 193, 185, 0.1);
+            width: 100%;
+            max-width: 480px;
+        }}
+        h2 {{
+            font-family: 'Newsreader', serif;
+            font-style: italic;
+            font-size: 32px;
+            font-weight: 400;
+            margin-bottom: 8px;
+            color: #1a1c1b;
+        }}
+        .scope {{
+            color: #645d56;
+            margin-bottom: 28px;
+            font-size: 14px;
+        }}
+        .scope code {{
+            background: #ffdbd0;
+            color: #7a2f15;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+        }}
+        h3 {{
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1c1b;
+            margin-bottom: 16px;
+        }}
+        .board-option {{
+            display: flex;
+            align-items: center;
+            padding: 18px 20px;
+            border: 2px solid rgba(219, 193, 185, 0.3);
+            margin-bottom: 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fafaf9;
+        }}
+        .board-option:hover {{
+            border-color: #c24e2c;
+            background: white;
+        }}
+        .board-option input[type="radio"] {{
+            width: 20px;
+            height: 20px;
+            margin-right: 14px;
+            accent-color: #c24e2c;
+        }}
+        .board-name {{
+            font-weight: 600;
+            color: #1a1c1b;
+            font-size: 15px;
+        }}
+        button {{
+            width: 100%;
+            padding: 16px;
+            background: #c24e2c;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 12px;
+        }}
+        button:hover {{
+            box-shadow: 0 8px 20px rgba(194, 78, 44, 0.3);
+            transform: scale(1.02);
+        }}
+        .no-boards {{
+            color: #645d56;
+            text-align: center;
+            padding: 32px 20px;
+            background: #f4f3f1;
+            border-radius: 16px;
+        }}
+        .no-boards p {{ margin-bottom: 8px; }}
     </style>
 </head>
 <body>
+    <div class="header">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+            </svg>
+        </div>
+        <span class="brand">Boardy</span>
+    </div>
     <div class="card">
-        <h2>Authorize {client_name}</h2>
-        <p class="scope">Requested permissions: <code>{scope}</code></p>
+        <h2>Authorize access</h2>
+        <p class="scope"><strong>{client_name}</strong> is requesting <code>{scope}</code></p>
         <form method="POST">
             <input type="hidden" name="client_id" value="{client_id}">
             <input type="hidden" name="redirect_uri" value="{redirect_uri}">
@@ -138,10 +367,10 @@ BOARD_SELECTION_TEMPLATE = """<!DOCTYPE html>
             <input type="hidden" name="code_challenge_method" value="{code_challenge_method}">
             <input type="hidden" name="user_id" value="{user_id}">
 
-            <h3>Select a board to authorize:</h3>
+            <h3>Select a board to share:</h3>
             {boards_html}
 
-            <button type="submit">Allow Access</button>
+            <button type="submit">Allow access</button>
         </form>
     </div>
 </body>
