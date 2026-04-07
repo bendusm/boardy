@@ -7,6 +7,9 @@ import LoginPage from "@/pages/Login";
 import RegisterPage from "@/pages/Register";
 import DashboardPage from "@/pages/Dashboard";
 import BoardPage from "@/pages/Board";
+import AccountPage from "@/pages/Account";
+import PrivacyPage from "@/pages/Privacy";
+import TermsPage from "@/pages/Terms";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, csrfToken } = useAuthStore();
@@ -61,6 +64,8 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route
           path="/dashboard"
           element={
@@ -74,6 +79,14 @@ export default function App() {
           element={
             <RequireAuth>
               <BoardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/account"
+          element={
+            <RequireAuth>
+              <AccountPage />
             </RequireAuth>
           }
         />

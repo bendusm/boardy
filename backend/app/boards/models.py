@@ -285,6 +285,20 @@ class BoardInviteRead(SQLModel):
     expires_at: datetime
 
 
+class MyInviteRead(SQLModel):
+    """Invite info for the invited user - includes token for accept/decline."""
+    id: str
+    board_id: str
+    board_name: str
+    email: str
+    role: BoardRole
+    invited_by_email: str
+    status: InviteStatus
+    token: str  # Safe to include for the user's own invites
+    created_at: datetime
+    expires_at: datetime
+
+
 class InviteAcceptResponse(SQLModel):
     board_id: str
     board_name: str

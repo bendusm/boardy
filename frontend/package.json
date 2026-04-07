@@ -16,7 +16,7 @@
     "@tanstack/react-query": "^5.49.0",
     "zustand": "^4.5.4",
     "@hello-pangea/dnd": "^16.6.0",
-    "axios": "^1.7.2",
+    "axios": "1.14.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.4.0",
     "lucide-react": "^0.400.0",

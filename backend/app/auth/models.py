@@ -12,6 +12,7 @@ class User(SQLModel, table=True):
     name: Optional[str] = None  # display name
     hashed_password: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    terms_accepted_at: Optional[datetime] = None  # GDPR: when user accepted Terms & Privacy Policy
 
     # Serializable representation (без пароля)
     def to_dict(self):

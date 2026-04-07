@@ -77,6 +77,17 @@ def delete_board(
     service.delete_board(session, board)
 
 
+@router.patch("/boards/{board_id}", response_model=BoardRead)
+def rename_board(
+    board_id: str,
+    body: BoardCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    board = _check_board(session, board_id, current_user, BoardRole.owner)
+    return service.rename_board(session, board, body.name)
+
+
 # ─── Columns ─────────────────────────────────────────────────────────
 
 @router.get("/boards/{board_id}/columns", response_model=list[ColumnRead])
@@ -100,9 +111,34 @@ def create_column(
     return service.create_column(session, board_id, body.name, body.position)
 
 
+@router.patch("/boards/{board_id}/columns/{column_id}", response_model=ColumnRead)
+def rename_column(
+    board_id: str,
+    column_id: str,
+    body: ColumnCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    _check_board(session, board_id, current_user, BoardRole.editor)
+    column = service.validate_column_in_board(session, board_id, column_id)
+    return service.rename_column(session, column, body.name)
+
+
+@router.delete("/boards/{board_id}/columns/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_column(
+    board_id: str,
+    column_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    _check_board(session, board_id, current_user, BoardRole.editor)
+    column = service.validate_column_in_board(session, board_id, column_id)
+    service.delete_column(session, column)
+
+
 # ─── Cards ───────────────────────────────────────────────────────────
 
-@router.get("/boards/{board_id}/columns/{column_id}/cards", response_model=list[CardRead])
+@router.get("/boards/{board_id}/columns/{column_id}/cards")
 def list_cards(
     board_id: str,
     column_id: str,
@@ -112,7 +148,8 @@ def list_cards(
     _check_board(session, board_id, current_user)
     # Security: Validate column belongs to this board (prevents IDOR)
     service.validate_column_in_board(session, board_id, column_id)
-    return service.get_cards(session, column_id)
+    cards = service.get_cards(session, column_id)
+    return [service.card_to_dict(session, c) for c in cards]
 
 
 @router.post("/boards/{board_id}/columns/{column_id}/cards", response_model=CardRead, status_code=201)
@@ -126,14 +163,19 @@ def create_card(
     _check_board(session, board_id, current_user, BoardRole.editor)
     # Security: Validate column belongs to this board (prevents IDOR)
     service.validate_column_in_board(session, board_id, column_id)
-    return service.create_card(
+    card = service.create_card(
         session,
         board_id=board_id,
         column_id=column_id,
         title=body.title,
         description=body.description,
         priority=body.priority,
+        color=body.color,
+        assignee_id=body.assignee_id,
+        due_date=body.due_date,
+        labels=body.labels,
     )
+    return service.card_to_dict(session, card)
 
 
 @router.patch("/cards/{card_id}", response_model=CardRead)
@@ -143,15 +185,23 @@ def update_card(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    import json
     card = _check_card(session, card_id)
     _check_board(session, card.board_id, current_user, BoardRole.editor)
-    return service.update_card(
+    # Handle labels serialization
+    labels_json = json.dumps(body.labels) if body.labels is not None else None
+    updated = service.update_card(
         session, card,
         title=body.title,
         description=body.description,
         priority=body.priority,
         status=body.status,
+        color=body.color,
+        assignee_id=body.assignee_id,
+        due_date=body.due_date,
+        labels=labels_json,
     )
+    return service.card_to_dict(session, updated)
 
 
 @router.post("/cards/{card_id}/move", response_model=CardRead)

@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
-import { ArrowLeft, Loader2, LayoutDashboard, Users } from "lucide-react";
-import { boardsApi, cardsApi } from "@/lib/api";
+import { ArrowLeft, Loader2, LayoutDashboard, Users, Settings, Plus } from "lucide-react";
+import { boardsApi, cardsApi, columnsApi } from "@/lib/api";
 import type { BoardFull, Card } from "@/types";
 import KanbanColumn from "@/components/kanban/KanbanColumn";
 import BoardMembersModal from "@/components/BoardMembersModal";
+import CardEditModal from "@/components/CardEditModal";
+import BoardSettingsModal from "@/components/BoardSettingsModal";
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
@@ -14,6 +16,7 @@ export default function BoardPage() {
   const qc = useQueryClient();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [showMembers, setShowMembers] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const { data: board, isLoading } = useQuery<BoardFull>({
     queryKey: ["board", boardId],
@@ -40,11 +43,46 @@ export default function BoardPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["board", boardId] }),
   });
 
+  const createColumnMutation = useMutation({
+    mutationFn: ({ name, position }: { name: string; position: number }) =>
+      columnsApi.create(boardId!, name, position),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["board", boardId] }),
+  });
+
+  const renameColumnMutation = useMutation({
+    mutationFn: ({ columnId, name }: { columnId: string; name: string }) =>
+      columnsApi.rename(boardId!, columnId, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["board", boardId] }),
+  });
+
+  const deleteColumnMutation = useMutation({
+    mutationFn: (columnId: string) => columnsApi.delete(boardId!, columnId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["board", boardId] }),
+  });
+
   async function handleAddCard(columnId: string, title: string) {
     await createCardMutation.mutateAsync({ columnId, title });
   }
 
+  async function handleAddColumn() {
+    const name = prompt("Enter column name:");
+    if (!name?.trim()) return;
+    const position = board?.columns.length ?? 0;
+    await createColumnMutation.mutateAsync({ name: name.trim(), position });
+  }
+
+  async function handleRenameColumn(columnId: string, name: string) {
+    await renameColumnMutation.mutateAsync({ columnId, name });
+  }
+
+  async function handleDeleteColumn(columnId: string) {
+    await deleteColumnMutation.mutateAsync(columnId);
+  }
+
+  const canEdit = board?.my_role === "owner" || board?.my_role === "editor";
+
   function onDragEnd(result: DropResult) {
+    if (!canEdit) return; // Viewers can't move cards
     const { source, destination, draggableId } = result;
     if (!destination) return;
     if (
@@ -109,13 +147,19 @@ export default function BoardPage() {
           <h1 className="text-lg font-semibold text-landing-on-background truncate">
             {board.name}
           </h1>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setShowMembers(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-landing-secondary hover:text-landing-primary hover:bg-landing-surface-container rounded-lg transition-colors"
             >
               <Users size={18} />
               <span className="hidden sm:inline">Share</span>
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-landing-secondary hover:text-landing-primary hover:bg-landing-surface-container rounded-lg transition-colors"
+            >
+              <Settings size={18} />
             </button>
           </div>
         </nav>
@@ -132,51 +176,39 @@ export default function BoardPage() {
                   key={col.id}
                   column={col}
                   boardId={board.id}
+                  canEdit={canEdit}
                   onAddCard={handleAddCard}
                   onCardClick={setSelectedCard}
+                  onRenameColumn={handleRenameColumn}
+                  onDeleteColumn={handleDeleteColumn}
                 />
               ))}
+            {/* Add column button */}
+            {canEdit && (
+              <button
+                onClick={handleAddColumn}
+                className="flex flex-col items-center justify-center w-80 shrink-0 min-h-[200px] bg-white/50 hover:bg-white rounded-2xl border-2 border-dashed border-landing-outline-variant/30 hover:border-landing-primary/50 transition-all group"
+              >
+                <div className="w-12 h-12 rounded-full bg-landing-surface-container-low group-hover:bg-landing-primary-fixed flex items-center justify-center mb-3 transition-colors">
+                  <Plus size={24} className="text-landing-secondary group-hover:text-landing-primary transition-colors" />
+                </div>
+                <span className="text-sm font-medium text-landing-secondary group-hover:text-landing-primary transition-colors">
+                  Add column
+                </span>
+              </button>
+            )}
           </div>
         </DragDropContext>
       </main>
 
-      {/* Card detail modal */}
+      {/* Card edit modal */}
       {selectedCard && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedCard(null)}
-        >
-          <div
-            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="font-headline italic text-2xl mb-4">
-              {selectedCard.title}
-            </h2>
-            {selectedCard.description && (
-              <p className="text-landing-secondary mb-6">
-                {selectedCard.description}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 mb-6">
-              <span className="px-3 py-1.5 rounded-full bg-landing-surface-container-low text-xs font-medium text-landing-secondary">
-                {selectedCard.priority}
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-landing-surface-container-low text-xs font-medium text-landing-secondary">
-                {selectedCard.status}
-              </span>
-              <span className="px-3 py-1.5 rounded-full bg-landing-primary-fixed text-xs font-medium text-landing-on-primary-fixed-variant">
-                by {selectedCard.created_by}
-              </span>
-            </div>
-            <button
-              onClick={() => setSelectedCard(null)}
-              className="w-full py-3 px-6 rounded-full border border-landing-outline-variant text-sm font-semibold text-landing-secondary hover:border-landing-primary/50 hover:text-landing-primary transition-all"
-            >
-              Close
-            </button>
-          </div>
-        </div>
+        <CardEditModal
+          card={selectedCard}
+          boardId={board.id}
+          myRole={board.my_role || "viewer"}
+          onClose={() => setSelectedCard(null)}
+        />
       )}
 
       {/* Members modal */}
@@ -186,6 +218,16 @@ export default function BoardPage() {
           boardName={board.name}
           isOwner={board.my_role === "owner"}
           onClose={() => setShowMembers(false)}
+        />
+      )}
+
+      {/* Settings modal */}
+      {showSettings && (
+        <BoardSettingsModal
+          boardId={board.id}
+          boardName={board.name}
+          isOwner={board.my_role === "owner"}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

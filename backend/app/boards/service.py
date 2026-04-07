@@ -150,6 +150,16 @@ def delete_board(session: Session, board: Board):
     session.commit()
 
 
+def rename_board(session: Session, board: Board, new_name: str) -> Board:
+    """Rename a board."""
+    board.name = new_name
+    board.slug = unique_slug(session, new_name)
+    session.add(board)
+    session.commit()
+    session.refresh(board)
+    return board
+
+
 # ─── Columns ─────────────────────────────────────────────────────────
 
 def validate_column_in_board(session: Session, board_id: str, column_id: str) -> Column:
@@ -177,6 +187,29 @@ def create_column(session: Session, board_id: str, name: str, position: int) -> 
     return col
 
 
+def rename_column(session: Session, column: Column, name: str) -> Column:
+    column.name = name
+    session.add(column)
+    session.commit()
+    session.refresh(column)
+    return column
+
+
+def delete_column(session: Session, column: Column) -> None:
+    """Delete a column and all its cards."""
+    # Delete all cards in this column first
+    cards = session.exec(select(Card).where(Card.column_id == column.id)).all()
+    for card in cards:
+        # Delete comments and attachments
+        for comment in session.exec(select(Comment).where(Comment.card_id == card.id)).all():
+            session.delete(comment)
+        for attachment in session.exec(select(Attachment).where(Attachment.card_id == card.id)).all():
+            session.delete(attachment)
+        session.delete(card)
+    session.delete(column)
+    session.commit()
+
+
 # ─── Cards ───────────────────────────────────────────────────────────
 
 def validate_assignee(session: Session, board_id: str, assignee_id: Optional[str]) -> None:
@@ -186,6 +219,10 @@ def validate_assignee(session: Session, board_id: str, assignee_id: Optional[str
     """
     if not assignee_id:
         return  # No assignee is valid
+
+    # AI agent is always valid
+    if assignee_id == AI_AGENT_ID:
+        return
 
     # Check user exists
     user = session.get(User, assignee_id)
@@ -413,10 +450,17 @@ def get_comments(session: Session, card_id: str) -> list[Comment]:
 
 # ─── Full board (for MCP) ─────────────────────────────────────────────
 
+# Virtual AI agent ID - used for assigning tasks to AI
+AI_AGENT_ID = "ai-agent"
+
+
 def get_user_name(session: Session, user_id: Optional[str]) -> Optional[str]:
     """Get user display name by ID."""
     if not user_id:
         return None
+    # Handle AI agent
+    if user_id == AI_AGENT_ID:
+        return "AI Assistant"
     user = session.get(User, user_id)
     if user:
         return user.name or user.email.split("@")[0]
@@ -427,6 +471,8 @@ def card_to_dict(session: Session, card: Card) -> dict:
     """Convert card to dict with all fields and assignee name."""
     return {
         "id": card.id,
+        "column_id": card.column_id,
+        "board_id": card.board_id,
         "title": card.title,
         "description": card.description,
         "priority": card.priority.value if hasattr(card.priority, 'value') else card.priority,

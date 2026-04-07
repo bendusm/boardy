@@ -176,6 +176,45 @@ def get_board(board_id: str) -> dict:
         return service.get_board_full(session, board_id, ctx.user_id)
 
 
+@mcp.tool(annotations={"destructiveHint": True})
+def delete_board(board_id: str) -> dict:
+    """Delete a board permanently.
+
+    WARNING: This action cannot be undone. Only board owners can delete boards.
+    All columns, cards, comments, and attachments will be permanently deleted.
+
+    Args:
+        board_id: The board to delete
+
+    Returns confirmation of deletion.
+    """
+    ctx = get_mcp_context()
+    with Session(engine) as session:
+        # Security: Verify board_id matches token scope
+        if board_id != ctx.board_id:
+            raise ValueError(f"Board {board_id} not accessible with this token")
+
+        # Security: Only owners can delete boards
+        if ctx.role != BoardRole.owner:
+            raise ValueError("Only board owners can delete boards")
+
+        require_write_scope(ctx)
+
+        board_result = service.get_board_with_access(session, board_id, ctx.user_id, BoardRole.owner)
+        if not board_result:
+            raise ValueError(f"Board {board_id} not found or you don't have owner permissions")
+
+        board, _ = board_result
+        board_name = board.name
+        service.delete_board(session, board)
+        logger.info(f"MCP deleted board {board_id}")
+        return {
+            "deleted": True,
+            "board_id": board_id,
+            "name": board_name,
+        }
+
+
 @mcp.tool(annotations={"destructiveHint": False})
 def create_card(
     board_id: str,

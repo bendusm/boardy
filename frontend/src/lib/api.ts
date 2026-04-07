@@ -36,12 +36,15 @@ api.interceptors.response.use(
 // ─── Auth ─────────────────────────────────────────────────────────
 
 export const authApi = {
-  register: (email: string, password: string) =>
-    api.post("/auth/register", { email, password }),
+  register: (email: string, password: string, agreedToTerms: boolean) =>
+    api.post("/auth/register", { email, password, agreed_to_terms: agreedToTerms }),
   login: (email: string, password: string) =>
     api.post("/auth/login", { email, password }),
   logout: () => api.post("/auth/logout"),
   me: () => api.get("/auth/me"),
+  deleteAccount: (password: string) =>
+    api.delete("/auth/account", { data: { password } }),
+  exportData: () => api.get("/auth/export"),
 };
 
 // ─── Boards ───────────────────────────────────────────────────────
@@ -51,6 +54,20 @@ export const boardsApi = {
   create: (name: string) => api.post("/boards", { name }),
   get: (id: string) => api.get(`/boards/${id}`),
   delete: (id: string) => api.delete(`/boards/${id}`),
+  rename: (id: string, name: string) => api.patch(`/boards/${id}`, { name }),
+};
+
+// ─── Cards ────────────────────────────────────────────────────────
+
+// ─── Columns ──────────────────────────────────────────────────────
+
+export const columnsApi = {
+  create: (boardId: string, name: string, position: number) =>
+    api.post(`/boards/${boardId}/columns`, { name, position }),
+  rename: (boardId: string, columnId: string, name: string) =>
+    api.patch(`/boards/${boardId}/columns/${columnId}`, { name, position: 0 }),
+  delete: (boardId: string, columnId: string) =>
+    api.delete(`/boards/${boardId}/columns/${columnId}`),
 };
 
 // ─── Cards ────────────────────────────────────────────────────────

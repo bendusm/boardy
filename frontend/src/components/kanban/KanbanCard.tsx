@@ -36,7 +36,7 @@ const COLOR_STRIPE: Record<CardColor, string> = {
 export default function KanbanCard({ card, isDragging, onClick }: Props) {
   const formatDueDate = (date: string) => {
     const d = new Date(date);
-    return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
   };
 
   return (

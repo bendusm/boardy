@@ -7,7 +7,7 @@ from app.core.deps import get_current_user
 from app.auth.models import User
 from .models import (
     BoardRole, InviteCreate, MemberRoleUpdate,
-    BoardMemberRead, BoardInviteRead, InviteAcceptResponse,
+    BoardMemberRead, BoardInviteRead, MyInviteRead, InviteAcceptResponse,
 )
 from . import service
 
@@ -16,25 +16,56 @@ router = APIRouter()
 
 # ─── Board Members ───────────────────────────────────────────────────
 
+# Virtual AI agent ID - used for assigning tasks to AI
+AI_AGENT_ID = "ai-agent"
+
+
 @router.get("/boards/{board_id}/members", response_model=list[BoardMemberRead])
 def list_members(
     board_id: str,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """List all members of a board. Any member can view."""
-    service.check_board_access(session, board_id, current_user.id, BoardRole.viewer)
+    """List all members of a board including owner and AI agent. Any member can view."""
+    board = service.check_board_access(session, board_id, current_user.id, BoardRole.viewer)
+
+    result = []
+
+    # Add owner first
+    owner = session.get(User, board.owner_id)
+    if owner:
+        result.append(BoardMemberRead(
+            id=f"owner-{board.owner_id}",  # Virtual ID for owner
+            user_id=board.owner_id,
+            user_email=owner.email,
+            role=BoardRole.owner,
+            created_at=board.created_at,
+        ))
+
+    # Add AI agent as virtual member
+    result.append(BoardMemberRead(
+        id=AI_AGENT_ID,
+        user_id=AI_AGENT_ID,
+        user_email="AI Assistant",
+        role=BoardRole.editor,  # AI has editor permissions
+        created_at=board.created_at,
+    ))
+
+    # Add other members
     members = service.get_board_members(session, board_id)
-    return [
-        BoardMemberRead(
+    for member, email in members:
+        # Skip if this is the owner (already added)
+        if member.user_id == board.owner_id:
+            continue
+        result.append(BoardMemberRead(
             id=member.id,
             user_id=member.user_id,
             user_email=email,
             role=member.role,
             created_at=member.created_at,
-        )
-        for member, email in members
-    ]
+        ))
+
+    return result
 
 
 @router.patch("/boards/{board_id}/members/{member_id}", response_model=BoardMemberRead)
@@ -178,15 +209,15 @@ def cancel_invite(
 
 # ─── My Invites (for invited users) ──────────────────────────────────
 
-@router.get("/invites/my", response_model=list[BoardInviteRead])
+@router.get("/invites/my", response_model=list[MyInviteRead])
 def my_invites(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all pending invites for current user."""
+    """Get all pending invites for current user. Includes token for accept/decline."""
     invites = service.get_user_pending_invites(session, current_user.email)
     return [
-        BoardInviteRead(
+        MyInviteRead(
             id=inv.id,
             board_id=inv.board_id,
             board_name=board_name,
@@ -194,6 +225,7 @@ def my_invites(
             role=inv.role,
             invited_by_email=inviter_email,
             status=inv.status,
+            token=inv.token,  # Safe: this is the user's own invite
             created_at=inv.created_at,
             expires_at=inv.expires_at,
         )
@@ -216,8 +248,11 @@ def accept_invite(
     if invite.email.lower() != current_user.email.lower():
         raise HTTPException(status_code=403, detail="This invite is for a different email")
 
-    # Check not expired
-    if invite.expires_at < datetime.now(timezone.utc):
+    # Check not expired (handle timezone-naive datetime from DB)
+    expires_at = invite.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invite has expired")
 
     # Check still pending

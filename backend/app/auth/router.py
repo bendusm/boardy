@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.responses import JSONResponse
 from sqlmodel import Session
@@ -78,6 +79,7 @@ def clear_auth_cookies(response: Response) -> None:
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+    agreed_to_terms: bool = False  # GDPR: explicit consent required
 
 
 class LoginRequest(BaseModel):
@@ -95,6 +97,10 @@ def register(body: RegisterRequest, request: Request, session: Session = Depends
     # Security: Rate limit registration to prevent abuse
     register_rate_limiter.check(request)
 
+    # GDPR: Require explicit consent to Terms and Privacy Policy
+    if not body.agreed_to_terms:
+        raise HTTPException(status_code=400, detail="You must agree to the Terms of Service and Privacy Policy")
+
     if get_user_by_email(session, body.email):
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -103,7 +109,7 @@ def register(body: RegisterRequest, request: Request, session: Session = Depends
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
 
-    user = create_user(session, email=body.email, password=body.password)
+    user = create_user(session, email=body.email, password=body.password, record_terms_consent=True)
     token = create_access_token(user.id)
 
     response = Response(media_type="application/json", status_code=status.HTTP_201_CREATED)
@@ -166,3 +172,123 @@ def logout(
 @router.get("/me")
 def me(current_user: User = Depends(get_current_user)):
     return current_user.to_dict()
+
+
+@router.get("/export")
+def export_user_data(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Export all user data as JSON (GDPR Article 20 - Data Portability).
+
+    Returns all personal data associated with the user account in a portable format.
+    """
+    from app.boards.models import Board, BoardMember, Column, Card, Comment
+
+    # User profile
+    user_data = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "terms_accepted_at": current_user.terms_accepted_at.isoformat() if current_user.terms_accepted_at else None,
+    }
+
+    # Owned boards with full content
+    from sqlmodel import select
+    owned_boards = session.exec(select(Board).where(Board.owner_id == current_user.id)).all()
+    boards_data = []
+    for board in owned_boards:
+        columns = session.exec(select(Column).where(Column.board_id == board.id)).all()
+        columns_data = []
+        for col in columns:
+            cards = session.exec(select(Card).where(Card.column_id == col.id)).all()
+            cards_data = []
+            for card in cards:
+                comments = session.exec(select(Comment).where(Comment.card_id == card.id)).all()
+                cards_data.append({
+                    "id": card.id,
+                    "title": card.title,
+                    "description": card.description,
+                    "priority": card.priority,
+                    "position": card.position,
+                    "created_by": card.created_by,
+                    "created_at": card.created_at.isoformat() if card.created_at else None,
+                    "comments": [
+                        {
+                            "id": c.id,
+                            "text": c.text,
+                            "created_by": c.created_by,
+                            "created_at": c.created_at.isoformat() if c.created_at else None,
+                        }
+                        for c in comments
+                    ],
+                })
+            columns_data.append({
+                "id": col.id,
+                "name": col.name,
+                "position": col.position,
+                "cards": cards_data,
+            })
+        boards_data.append({
+            "id": board.id,
+            "name": board.name,
+            "role": "owner",
+            "created_at": board.created_at.isoformat() if board.created_at else None,
+            "columns": columns_data,
+        })
+
+    # Board memberships (not owned)
+    memberships = session.exec(
+        select(BoardMember).where(BoardMember.user_id == current_user.id)
+    ).all()
+    for membership in memberships:
+        board = session.get(Board, membership.board_id)
+        if board and board.owner_id != current_user.id:
+            boards_data.append({
+                "id": board.id,
+                "name": board.name,
+                "role": membership.role,
+                "joined_at": membership.joined_at.isoformat() if membership.joined_at else None,
+            })
+
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "user": user_data,
+        "boards": boards_data,
+    }
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+
+
+@router.delete("/account")
+def delete_account(
+    body: DeleteAccountRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete user account permanently.
+
+    Security: Requires password confirmation to prevent accidental deletion.
+    Deletes all owned boards and removes user from shared boards.
+    """
+    from .service import delete_user_account
+
+    # Verify password
+    user = authenticate_user(session, email=current_user.email, password=body.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid password",
+        )
+
+    # Delete account and all associated data
+    delete_user_account(session, current_user.id)
+
+    # Clear cookies
+    response = JSONResponse(content={"ok": True, "message": "Account deleted"})
+    clear_auth_cookies(response)
+    return response

@@ -1,8 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from sqlmodel import Session, text
 
 from app.core.config import settings
+from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.database import get_session
 from app.core.database import create_db_and_tables
 from app.auth.router import router as auth_router
 from app.auth.oauth_router import discovery_router, oauth_router
@@ -29,12 +33,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", settings.app_url],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-CSRF-Token"],
 )
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
@@ -51,5 +56,13 @@ app.mount("/mcp", mcp_app)
 
 
 @app.get("/health")
-def health():
-    return {"status": "ok", "app": settings.app_name}
+def health(session: Session = Depends(get_session)):
+    """Health check endpoint with database connectivity verification."""
+    try:
+        session.exec(text("SELECT 1"))
+        return {"status": "ok", "app": settings.app_name, "database": "connected"}
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "app": settings.app_name, "database": "disconnected"}
+        )

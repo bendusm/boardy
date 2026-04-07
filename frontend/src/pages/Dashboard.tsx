@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, LogOut, LayoutDashboard, Loader2, LayoutGrid, Mail, Check, X } from "lucide-react";
+import { Plus, LogOut, LayoutDashboard, Loader2, LayoutGrid, Mail, Check, X, Trash2, Settings } from "lucide-react";
 import { boardsApi, invitesApi, authApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import type { Board, BoardInvite, BoardRole } from "@/types";
@@ -53,6 +53,20 @@ export default function DashboardPage() {
     },
   });
 
+  const deleteBoardMutation = useMutation({
+    mutationFn: (boardId: string) => boardsApi.delete(boardId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["boards"] });
+    },
+  });
+
+  function handleDeleteBoard(e: React.MouseEvent, board: Board) {
+    e.stopPropagation();
+    if (confirm(`Delete "${board.name}"? This cannot be undone.`)) {
+      deleteBoardMutation.mutate(board.id);
+    }
+  }
+
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (newName.trim()) createMutation.mutate(newName.trim());
@@ -75,6 +89,13 @@ export default function DashboardPage() {
             <span className="text-sm text-landing-secondary hidden sm:block">
               {user?.email}
             </span>
+            <button
+              onClick={() => navigate("/account")}
+              className="p-2 rounded-full border border-landing-outline-variant hover:border-landing-primary/50 hover:text-landing-primary transition-all text-landing-secondary"
+              title="Account settings"
+            >
+              <Settings size={18} />
+            </button>
             <button
               onClick={async () => {
                 await authApi.logout().catch(() => {});
@@ -222,10 +243,10 @@ export default function DashboardPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {boards.map((board) => (
-              <button
+              <div
                 key={board.id}
                 onClick={() => navigate(`/boards/${board.id}`)}
-                className="text-left p-6 bg-white rounded-2xl shadow-startup border border-landing-outline-variant/10 hover:shadow-startup-hover hover:border-landing-primary/20 transition-all group"
+                className="text-left p-6 bg-white rounded-2xl shadow-startup border border-landing-outline-variant/10 hover:shadow-startup-hover hover:border-landing-primary/20 transition-all group cursor-pointer relative"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-10 h-10 rounded-xl bg-landing-primary-fixed/50 flex items-center justify-center">
@@ -234,11 +255,23 @@ export default function DashboardPage() {
                       className="text-landing-primary"
                     />
                   </div>
-                  {board.my_role && board.my_role !== "owner" && (
-                    <span className={`px-2 py-1 rounded text-xs ${ROLE_COLORS[board.my_role]}`}>
-                      {board.my_role}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {board.my_role && board.my_role !== "owner" && (
+                      <span className={`px-2 py-1 rounded text-xs ${ROLE_COLORS[board.my_role]}`}>
+                        {board.my_role}
+                      </span>
+                    )}
+                    {(!board.my_role || board.my_role === "owner") && (
+                      <button
+                        onClick={(e) => handleDeleteBoard(e, board)}
+                        disabled={deleteBoardMutation.isPending}
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Delete board"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <h3 className="font-semibold text-lg text-landing-on-background group-hover:text-landing-primary transition-colors mb-2">
                   {board.name}
@@ -246,7 +279,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-landing-secondary">
                   Created {new Date(board.created_at).toLocaleDateString()}
                 </p>
-              </button>
+              </div>
             ))}
           </div>
         )}

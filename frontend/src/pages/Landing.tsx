@@ -316,18 +316,18 @@ export default function LandingPage() {
             © 2024 Boardy. Built for builders.
           </div>
           <div className="flex flex-wrap justify-center gap-8">
-            <a
+            <Link
               className="text-xs font-bold text-landing-secondary hover:text-landing-primary transition-all"
-              href="#"
+              to="/privacy"
             >
               Privacy
-            </a>
-            <a
+            </Link>
+            <Link
               className="text-xs font-bold text-landing-secondary hover:text-landing-primary transition-all"
-              href="#"
+              to="/terms"
             >
               Terms
-            </a>
+            </Link>
             <a
               className="text-xs font-bold text-landing-secondary hover:text-landing-primary transition-all"
               href="#"

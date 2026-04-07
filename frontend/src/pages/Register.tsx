@@ -11,6 +11,7 @@ export default function RegisterPage() {
   const setAuth = useAuthStore((s) => s.setAuth);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +24,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const { data } = await authApi.register(email, password);
+      const { data } = await authApi.register(email, password, agreedToTerms);
       queryClient.clear(); // Clear cache from previous user
       setAuth(data.user, data.csrf_token);
       navigate("/dashboard");
@@ -119,9 +120,36 @@ export default function RegisterPage() {
                 />
               </div>
 
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreedToTerms}
+                  onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-landing-outline-variant/30 text-landing-primary focus:ring-landing-primary/30"
+                />
+                <span className="text-sm text-landing-secondary">
+                  I agree to the{" "}
+                  <Link
+                    to="/terms"
+                    className="text-landing-primary hover:underline"
+                    target="_blank"
+                  >
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    to="/privacy"
+                    className="text-landing-primary hover:underline"
+                    target="_blank"
+                  >
+                    Privacy Policy
+                  </Link>
+                </span>
+              </label>
+
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !agreedToTerms}
                 className="w-full py-4 px-6 bg-landing-primary text-white rounded-full text-base font-bold hover:shadow-lg hover:shadow-landing-primary/20 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -135,11 +163,7 @@ export default function RegisterPage() {
               </button>
             </form>
 
-            <p className="mt-6 text-xs text-landing-secondary text-center">
-              By creating an account, you agree to our Terms of Service and
-              Privacy Policy
-            </p>
-
+            
             <div className="mt-6 pt-6 border-t border-landing-outline-variant/20 text-center">
               <p className="text-sm text-landing-secondary">
                 Already have an account?{" "}
