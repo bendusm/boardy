@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     # MCP
     mcp_server_url: str = "https://boardy.alivik.io/mcp"
 
+    # Social Auth - GitHub
+    github_client_id: str = ""
+    github_client_secret: str = ""
+
+    # Social Auth - Google
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

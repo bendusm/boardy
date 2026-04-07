@@ -10,9 +10,13 @@ class User(SQLModel, table=True):
     id: str = Field(default_factory=ulid_field, primary_key=True)
     email: str = Field(unique=True, index=True)
     name: Optional[str] = None  # display name
-    hashed_password: str
+    hashed_password: Optional[str] = None  # Optional for social auth users
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     terms_accepted_at: Optional[datetime] = None  # GDPR: when user accepted Terms & Privacy Policy
+
+    # Social auth providers
+    github_id: Optional[str] = Field(default=None, unique=True, index=True)
+    google_id: Optional[str] = Field(default=None, unique=True, index=True)
 
     # Serializable representation (без пароля)
     def to_dict(self):

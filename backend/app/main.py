@@ -11,6 +11,7 @@ from app.core.database import get_session
 from app.core.database import create_db_and_tables
 from app.auth.router import router as auth_router
 from app.auth.oauth_router import discovery_router, oauth_router
+from app.auth.social_auth_router import router as social_auth_router
 from app.boards.router import router as boards_router
 from app.boards.members_router import router as members_router
 from app.mcp_server import mcp
@@ -59,6 +60,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(social_auth_router, prefix="/api/v1/auth", tags=["social-auth"])
 app.include_router(boards_router, prefix="/api/v1", tags=["boards"])
 app.include_router(members_router, prefix="/api/v1", tags=["members"])
 
