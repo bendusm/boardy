@@ -54,7 +54,14 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MCPAuthMiddleware)  # RFC 9728 WWW-Authenticate for MCP
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", settings.app_url],
+    allow_origins=[
+        "http://localhost:5173",
+        settings.app_url,
+        # Anthropic domains for MCP OAuth
+        "https://claude.ai",
+        "https://www.claude.ai",
+        "https://api.claude.ai",
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-CSRF-Token"],
