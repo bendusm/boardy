@@ -626,9 +626,10 @@ def search_cards(
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def list_users(board_id: str) -> list[dict]:
-    """List all users who have access to a board.
+    """List all users who have access to a board, including AI Assistant.
 
     Useful for getting user IDs for assignee_id filter.
+    Use "ai-agent" as assignee_id to assign tasks to AI Assistant.
 
     Args:
         board_id: The board ID
@@ -638,11 +639,37 @@ def list_users(board_id: str) -> list[dict]:
     ctx = get_mcp_context()
     ctx.check_board_access(board_id)
     with Session(engine) as session:
-        # Get all board members
         from app.auth.models import User
-        members = service.get_board_members(session, board_id)
+
         users = []
+
+        # Add AI Assistant as virtual assignee
+        users.append({
+            "id": "ai-agent",
+            "name": "AI Assistant",
+            "email": "ai-agent@boardy.app",
+            "role": "editor",
+        })
+
+        # Get board owner
+        board_result = service.get_board_with_access(session, board_id, ctx.user_id)
+        if board_result:
+            board, _ = board_result
+            owner = session.get(User, board.owner_id)
+            if owner:
+                users.append({
+                    "id": owner.id,
+                    "name": owner.name or owner.email.split("@")[0],
+                    "email": owner.email,
+                    "role": "owner",
+                })
+
+        # Get all board members
+        members = service.get_board_members(session, board_id)
         for member, email in members:
+            # Skip owner (already added)
+            if board_result and member.user_id == board_result[0].owner_id:
+                continue
             user = session.get(User, member.user_id)
             if user:
                 users.append({
