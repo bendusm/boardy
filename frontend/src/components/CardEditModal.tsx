@@ -1,9 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, Trash2, Calendar, User, Palette, Flag, Activity, Eye } from "lucide-react";
 import { cardsApi, membersApi } from "@/lib/api";
 import type { Card, CardColor, CardStatus, Priority, BoardMember, BoardRole } from "@/types";
 import { cn } from "@/lib/utils";
+
+function linkify(text: string) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) =>
+    urlRegex.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-landing-primary underline hover:text-landing-primary/80 break-all">{part}</a>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    )
+  );
+}
 
 interface Props {
   card: Card;
@@ -41,6 +53,7 @@ export default function CardEditModal({ card, boardId, myRole, onClose }: Props)
   const qc = useQueryClient();
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || "");
+  const [isEditing, setIsEditing] = useState(false);
   const [color, setColor] = useState<CardColor>(card.color);
   const [priority, setPriority] = useState<Priority>(card.priority);
   const [status, setStatus] = useState<CardStatus>(card.status);
@@ -148,17 +161,23 @@ export default function CardEditModal({ card, boardId, myRole, onClose }: Props)
           {/* Description */}
           <div className="mb-6">
             <label className="text-sm font-medium text-gray-500 mb-2 block">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => canEdit && setDescription(e.target.value)}
-              readOnly={!canEdit}
-              className={cn(
-                "w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-landing-primary/30 focus:border-landing-primary",
-                !canEdit && "cursor-default"
-              )}
-              rows={3}
-              placeholder={canEdit ? "Add a description..." : "No description"}
-            />
+            {canEdit || isEditing ? (
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onFocus={() => setIsEditing(true)}
+                onBlur={() => setIsEditing(false)}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-landing-primary/30 focus:border-landing-primary"
+                rows={9}
+                placeholder="Add a description..."
+              />
+            ) : (
+              <div
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm min-h-[180px] whitespace-pre-wrap break-words"
+              >
+                {description ? linkify(description) : <span className="text-gray-400">No description</span>}
+              </div>
+            )}
           </div>
 
           {/* Color picker */}
