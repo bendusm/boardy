@@ -124,13 +124,31 @@ LOGIN_PAGE_TEMPLATE = """<!DOCTYPE html>
     <title>Boardy - Sign In</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,400;1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        @font-face {{
+            font-family: 'Plus Jakarta Sans';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('/fonts/PlusJakartaSans-Regular.woff2') format('woff2');
+        }}
+        @font-face {{
+            font-family: 'Plus Jakarta Sans';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('/fonts/PlusJakartaSans-SemiBold.woff2') format('woff2');
+        }}
+        @font-face {{
+            font-family: 'Newsreader';
+            font-style: italic;
+            font-weight: 700;
+            font-display: swap;
+            src: url('/fonts/Newsreader-BoldItalic.woff2') format('woff2');
+        }}
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
             min-height: 100vh;
             background: #fafaf9;
             color: #1a1c1b;
@@ -278,13 +296,31 @@ BOARD_SELECTION_TEMPLATE = """<!DOCTYPE html>
     <title>Boardy - Authorize</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,400;1,600;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        @font-face {{
+            font-family: 'Plus Jakarta Sans';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('/fonts/PlusJakartaSans-Regular.woff2') format('woff2');
+        }}
+        @font-face {{
+            font-family: 'Plus Jakarta Sans';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('/fonts/PlusJakartaSans-SemiBold.woff2') format('woff2');
+        }}
+        @font-face {{
+            font-family: 'Newsreader';
+            font-style: italic;
+            font-weight: 700;
+            font-display: swap;
+            src: url('/fonts/Newsreader-BoldItalic.woff2') format('woff2');
+        }}
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
             min-height: 100vh;
             background: #fafaf9;
             color: #1a1c1b;
