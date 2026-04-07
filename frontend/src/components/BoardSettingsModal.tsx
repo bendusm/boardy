@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { X, Trash2, Loader2 } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { X, Trash2, Loader2, Bot, Copy, Check, ExternalLink } from "lucide-react";
 import { boardsApi } from "@/lib/api";
 
 interface Props {
@@ -17,6 +17,15 @@ export default function BoardSettingsModal({ boardId, boardName, isOwner, onClos
   const [name, setName] = useState(boardName);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const mcpUrl = `${window.location.origin}/mcp`;
+
+  function handleCopyMcpUrl() {
+    navigator.clipboard.writeText(mcpUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   const renameMutation = useMutation({
     mutationFn: (newName: string) => boardsApi.rename(boardId, newName),
@@ -69,9 +78,41 @@ export default function BoardSettingsModal({ boardId, boardName, isOwner, onClos
             </button>
           </div>
 
+          {/* Connect AI section */}
+          <div className="mb-8">
+            <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <Bot size={16} className="text-landing-primary" />
+              Connect AI Assistant
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Add this MCP URL to Claude Desktop or Claude Code to let AI manage this board.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={mcpUrl}
+                readOnly
+                className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm font-mono text-gray-600"
+              />
+              <button
+                onClick={handleCopyMcpUrl}
+                className="px-4 py-3 bg-landing-primary text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all flex items-center gap-2"
+              >
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <Link
+              to="/docs"
+              className="inline-flex items-center gap-1 text-xs text-landing-primary hover:underline mt-2"
+            >
+              View setup instructions <ExternalLink size={12} />
+            </Link>
+          </div>
+
           {/* Rename section */}
           {isOwner && (
-            <div className="mb-8">
+            <div className="mb-8 pt-6 border-t border-gray-100">
               <h3 className="text-sm font-medium text-gray-700 mb-3">Board Name</h3>
               <form onSubmit={handleRename} className="flex gap-2">
                 <input

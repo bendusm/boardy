@@ -2,13 +2,12 @@ import { Link } from "react-router-dom";
 import {
   LayoutDashboard,
   Bot,
-  PlayCircle,
   ClipboardList,
   Link2,
   Zap,
   Sparkles,
-  GitCommit,
-  Terminal,
+  CheckCircle,
+  Globe,
   Users,
   Heart,
 } from "lucide-react";
@@ -40,12 +39,12 @@ export default function LandingPage() {
             >
               Process
             </a>
-            <a
+            <Link
               className="text-landing-secondary font-medium text-sm hover:text-landing-primary transition-colors"
-              href="#"
+              to="/docs"
             >
               Documentation
-            </a>
+            </Link>
           </div>
           <div className="flex items-center gap-4">
             <Link
@@ -78,7 +77,7 @@ export default function LandingPage() {
             <h1 className="font-headline italic text-6xl md:text-7xl lg:text-[5.5rem] leading-[1.05] tracking-tight mb-8">
               Your AI manages the board.{" "}
               <span className="text-landing-primary block not-italic font-body font-bold text-5xl md:text-6xl mt-2">
-                You just ship.
+                You stay in control.
               </span>
             </h1>
             <p className="text-landing-secondary text-lg md:text-xl leading-relaxed mb-10 max-w-xl">
@@ -93,10 +92,12 @@ export default function LandingPage() {
               >
                 Get started free
               </Link>
-              <button className="flex items-center gap-2 px-6 py-4 rounded-full border border-landing-outline-variant hover:bg-landing-surface-container-low transition-all font-semibold text-landing-secondary">
-                <PlayCircle className="w-5 h-5 text-landing-primary" />
-                Watch demo
-              </button>
+              <Link
+                to="/docs"
+                className="flex items-center gap-2 px-6 py-4 rounded-full border border-landing-outline-variant hover:bg-landing-surface-container-low transition-all font-semibold text-landing-secondary"
+              >
+                Read the docs
+              </Link>
             </div>
           </div>
           <div className="lg:col-span-5 relative">
@@ -198,8 +199,8 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-xl font-bold mb-4">Auto-Update</h3>
                 <p className="text-landing-secondary leading-relaxed text-sm">
-                  Your AI assistant tracks progress and closes cards as you push
-                  code. Pure magic.
+                  Your AI assistant tracks progress and updates cards as you
+                  complete work. Pure magic.
                 </p>
               </div>
             </div>
@@ -294,10 +295,15 @@ export default function LandingPage() {
               >
                 Get started free
               </Link>
-              <button className="w-full sm:w-auto flex items-center justify-center gap-2 text-landing-on-background bg-white px-10 py-5 rounded-full border border-landing-outline-variant hover:border-landing-primary/50 transition-all font-bold">
+              <a
+                href="https://ko-fi.com/boardy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 text-landing-on-background bg-white px-10 py-5 rounded-full border border-landing-outline-variant hover:border-landing-primary/50 transition-all font-bold"
+              >
                 Support on Ko-fi{" "}
                 <Heart className="w-5 h-5 text-landing-primary fill-landing-primary" />
-              </button>
+              </a>
             </div>
           </div>
         </section>
@@ -336,15 +342,11 @@ export default function LandingPage() {
             </Link>
             <a
               className="text-xs font-bold text-landing-secondary hover:text-landing-primary transition-all"
-              href="#"
+              href="https://ko-fi.com/boardy"
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              Github
-            </a>
-            <a
-              className="text-xs font-bold text-landing-secondary hover:text-landing-primary transition-all"
-              href="#"
-            >
-              Donate
+              Support
             </a>
           </div>
         </div>

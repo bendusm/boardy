@@ -11,6 +11,7 @@ import AccountPage from "@/pages/Account";
 import PrivacyPage from "@/pages/Privacy";
 import TermsPage from "@/pages/Terms";
 import ImprintPage from "@/pages/Imprint";
+import DocsPage from "@/pages/Docs";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, csrfToken } = useAuthStore();
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/imprint" element={<ImprintPage />} />
+        <Route path="/docs" element={<DocsPage />} />
         <Route
           path="/dashboard"
           element={

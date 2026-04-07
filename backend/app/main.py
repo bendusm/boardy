@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from sqlmodel import Session, text
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.core.security_headers import SecurityHeadersMiddleware
@@ -13,6 +14,20 @@ from app.auth.oauth_router import discovery_router, oauth_router
 from app.boards.router import router as boards_router
 from app.boards.members_router import router as members_router
 from app.mcp_server import mcp
+
+
+class MCPAuthMiddleware(BaseHTTPMiddleware):
+    """Middleware to add RFC 9728 WWW-Authenticate header for MCP 401 responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        # Add WWW-Authenticate header for 401 responses on /mcp endpoint
+        if request.url.path.startswith("/mcp") and response.status_code == 401:
+            resource_metadata_url = f"{settings.app_url}/.well-known/oauth-protected-resource"
+            response.headers["WWW-Authenticate"] = f'Bearer resource_metadata="{resource_metadata_url}"'
+
+        return response
 
 # Get MCP HTTP app for mounting
 mcp_app = mcp.http_app()
@@ -34,6 +49,7 @@ app = FastAPI(
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(MCPAuthMiddleware)  # RFC 9728 WWW-Authenticate for MCP
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", settings.app_url],

@@ -554,6 +554,23 @@ def oauth_metadata():
     }
 
 
+@discovery_router.get("/.well-known/oauth-protected-resource")
+def protected_resource_metadata():
+    """RFC 9728 OAuth 2.0 Protected Resource Metadata.
+
+    This endpoint tells MCP clients how to authenticate with the Boardy MCP server.
+    Required for Anthropic MCP Directory listing.
+    """
+    base_url = settings.app_url
+    return {
+        "resource": f"{base_url}/mcp",
+        "authorization_servers": [base_url],
+        "scopes_supported": ["board:read", "board:write"],
+        "bearer_methods_supported": ["header"],
+        "resource_documentation": f"{base_url}/docs",
+    }
+
+
 # ─── Client Registration (RFC 7591) ─────────────────────────────────────
 
 @oauth_router.post("/register", response_model=ClientRegistrationResponse)
