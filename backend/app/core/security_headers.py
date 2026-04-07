@@ -6,7 +6,10 @@ Adds standard security headers recommended by OWASP:
 - X-XSS-Protection: Enable XSS filtering (legacy browsers)
 - Referrer-Policy: Control referrer information
 - Strict-Transport-Security: Enforce HTTPS (production only)
+- Content-Security-Policy: Prevent XSS and injection attacks
 """
+from urllib.parse import urlparse
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -35,5 +38,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"
             )
+
+        # Content Security Policy - protection against XSS and injection attacks
+        parsed_url = urlparse(settings.app_url)
+        domain = parsed_url.netloc or parsed_url.path  # Handle URLs with/without scheme
+        csp_directives = [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",  # Tailwind uses inline styles
+            "img-src 'self' data: blob:",  # data: for base64, blob: for uploads
+            "font-src 'self'",
+            f"connect-src 'self' wss://{domain} https://{domain}",
+            "frame-ancestors 'none'",
+            "form-action 'self'",
+            "base-uri 'self'",
+        ]
+        response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
 
         return response

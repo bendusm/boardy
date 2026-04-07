@@ -38,12 +38,20 @@ export default function PrivacyPage() {
           <section className="mb-12">
             <h2 className="text-2xl font-bold mb-4">1. Data Controller</h2>
             <p className="text-landing-secondary mb-4">
-              Boardy ("we", "us", or "our") is the data controller responsible
-              for your personal data. If you have any questions about this
-              Privacy Policy or our data practices, please contact us at:
+              The data controller responsible for your personal data is:
             </p>
+            <div className="text-landing-secondary mb-4 pl-4 border-l-2 border-landing-outline-variant/30">
+              <p className="font-semibold">boardy.ALIVIK</p>
+              <p>Michael Bendus</p>
+              <p>Dockenhudener Strasse 23</p>
+              <p>22587 Hamburg</p>
+              <p>Germany</p>
+              <p className="mt-2">Email: contact@alivik.io</p>
+              <p>VAT ID: DE369941265</p>
+            </div>
             <p className="text-landing-secondary">
-              Email: privacy@boardy.app
+              If you have any questions about this Privacy Policy or our data
+              practices, please contact us at the email address above.
             </p>
           </section>
 
@@ -184,7 +192,7 @@ export default function PrivacyPage() {
               >
                 Account Settings
               </Link>{" "}
-              or contact us at privacy@boardy.app.
+              or contact us at contact@alivik.io.
             </p>
           </section>
 
@@ -264,7 +272,7 @@ export default function PrivacyPage() {
             <div className="font-headline italic text-lg font-bold">Boardy</div>
           </div>
           <div className="text-xs font-medium text-landing-secondary/60">
-            © 2024 Boardy. Built for builders.
+            © {new Date().getFullYear()} boardy.ALIVIK. All rights reserved.
           </div>
         </div>
       </footer>

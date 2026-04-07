@@ -313,7 +313,7 @@ export default function LandingPage() {
             <div className="font-headline italic text-lg font-bold">Boardy</div>
           </div>
           <div className="text-xs font-medium text-landing-secondary/60 mb-8 md:mb-0">
-            © 2024 Boardy. Built for builders.
+            © {new Date().getFullYear()} boardy.ALIVIK. All rights reserved.
           </div>
           <div className="flex flex-wrap justify-center gap-8">
             <Link
@@ -327,6 +327,12 @@ export default function LandingPage() {
               to="/terms"
             >
               Terms
+            </Link>
+            <Link
+              className="text-xs font-bold text-landing-secondary hover:text-landing-primary transition-all"
+              to="/imprint"
+            >
+              Imprint
             </Link>
             <a
               className="text-xs font-bold text-landing-secondary hover:text-landing-primary transition-all"

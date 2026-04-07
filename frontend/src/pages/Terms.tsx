@@ -220,7 +220,7 @@ export default function TermsPage() {
             <h2 className="text-2xl font-bold mb-4">14. Contact</h2>
             <p className="text-landing-secondary">
               If you have questions about these Terms, please contact us at:
-              support@boardy.app
+              contact@alivik.io
             </p>
           </section>
         </div>
@@ -236,7 +236,7 @@ export default function TermsPage() {
             <div className="font-headline italic text-lg font-bold">Boardy</div>
           </div>
           <div className="text-xs font-medium text-landing-secondary/60">
-            © 2024 Boardy. Built for builders.
+            © {new Date().getFullYear()} boardy.ALIVIK. All rights reserved.
           </div>
         </div>
       </footer>
