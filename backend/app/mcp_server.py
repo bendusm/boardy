@@ -176,7 +176,7 @@ def require_write_scope(ctx: MCPContext) -> None:
 
 # ─── MCP Tools ──────────────────────────────────────────────────────────
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations={"readOnlyHint": True, "title": "List Boards"})
 def list_boards() -> list[dict]:
     """List boards accessible via current token.
 
@@ -193,7 +193,7 @@ def list_boards() -> list[dict]:
         return results
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations={"readOnlyHint": True, "title": "Get Board"})
 def get_board(board_id: str) -> dict:
     """Get full board with columns and cards.
 
@@ -211,7 +211,7 @@ def get_board(board_id: str) -> dict:
         return service.get_board_full(session, board_id, ctx.user_id)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@mcp.tool(annotations={"destructiveHint": True, "title": "Delete Board"})
 def delete_board(board_id: str) -> dict:
     """Delete a board permanently.
 
@@ -247,7 +247,7 @@ def delete_board(board_id: str) -> dict:
         }
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Create Card"})
 def create_card(
     board_id: str,
     column_id: str,
@@ -300,7 +300,7 @@ def create_card(
         }
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Update Card"})
 def update_card(
     card_id: str,
     title: Optional[str] = None,
@@ -364,7 +364,7 @@ def update_card(
         return service.card_to_dict(session, updated)
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Move Card"})
 def move_card(card_id: str, to_column_id: str) -> dict:
     """Move a card to a different column.
 
@@ -399,7 +399,7 @@ def move_card(card_id: str, to_column_id: str) -> dict:
         }
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Add Comment"})
 def add_comment(card_id: str, text: str) -> dict:
     """Add a comment to a card.
 
@@ -437,7 +437,7 @@ def add_comment(card_id: str, text: str) -> dict:
         }
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Attach File"})
 def attach_file(card_id: str, file_url: str, filename: str) -> dict:
     """Attach a file to a card via URL.
 
@@ -477,7 +477,7 @@ def attach_file(card_id: str, file_url: str, filename: str) -> dict:
         }
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Close Card"})
 def close_card(card_id: str, reason: Optional[str] = None) -> dict:
     """Close a card (mark as done).
 
@@ -504,7 +504,7 @@ def close_card(card_id: str, reason: Optional[str] = None) -> dict:
         return service.card_to_dict(session, closed)
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@mcp.tool(annotations={"destructiveHint": True, "title": "Delete Card"})
 def delete_card(card_id: str) -> dict:
     """Permanently delete a card.
 
@@ -535,7 +535,7 @@ def delete_card(card_id: str) -> dict:
         }
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Archive Card"})
 def archive_card(card_id: str) -> dict:
     """Archive a card (soft delete).
 
@@ -561,7 +561,7 @@ def archive_card(card_id: str) -> dict:
         return service.card_to_dict(session, archived)
 
 
-@mcp.tool(annotations={"destructiveHint": False})
+@mcp.tool(annotations={"destructiveHint": False, "title": "Duplicate Card"})
 def duplicate_card(card_id: str, to_column_id: Optional[str] = None) -> dict:
     """Duplicate a card.
 
@@ -588,7 +588,7 @@ def duplicate_card(card_id: str, to_column_id: Optional[str] = None) -> dict:
         return service.card_to_dict(session, new_card)
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations={"readOnlyHint": True, "title": "Search Cards"})
 def search_cards(
     board_id: str,
     column_id: Optional[str] = None,
@@ -638,7 +638,7 @@ def search_cards(
         return [service.card_to_dict(session, c) for c in cards]
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations={"readOnlyHint": True, "title": "List Users"})
 def list_users(board_id: str) -> list[dict]:
     """List all users who have access to a board, including AI Assistant.
 
