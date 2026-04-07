@@ -26,32 +26,16 @@ function AuthLoader({ children }: { children: React.ReactNode }) {
   const csrfToken = useAuthStore((s) => s.csrfToken);
 
   useEffect(() => {
-    // Try to restore session from httpOnly cookie
-    if (!csrfToken) {
-      authApi.me()
-        .then(({ data }) => {
-          // Read CSRF token from cookie (set by social auth or regular login)
-          const csrfFromCookie = document.cookie
-            .split("; ")
-            .find((c) => c.startsWith("boardy_csrf="))
-            ?.split("=")[1] || "";
-          const restoredCsrf = sessionStorage.getItem("boardy_csrf") || csrfFromCookie;
-          if (restoredCsrf) {
-            sessionStorage.setItem("boardy_csrf", restoredCsrf);
-          }
-          setAuth(data, restoredCsrf);
-        })
-        .catch(() => {
-          // No valid session
-        })
-        .finally(() => setLoading(false));
-    } else {
-      // Already have CSRF token, try to get user
-      authApi.me()
-        .then(({ data }) => setAuth(data, csrfToken))
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
+    // Restore session from httpOnly cookie — /me now returns csrf_token
+    authApi.me()
+      .then(({ data }) => {
+        const { csrf_token, ...user } = data;
+        setAuth(user, csrf_token);
+      })
+      .catch(() => {
+        // No valid session
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
