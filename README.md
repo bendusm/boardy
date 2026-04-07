@@ -166,7 +166,7 @@ docker compose -f docker-compose.prod.yml up -d
 
 ## License
 
-MIT
+AGPL-3.0 — see [LICENSE](LICENSE)
 
 ---
 
