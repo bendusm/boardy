@@ -242,7 +242,7 @@ export default function DocsPage() {
               </div>
               <p className="text-sm text-landing-secondary">
                 Authentication uses OAuth 2.1 with PKCE. See the{" "}
-                <a href="https://github.com/alivik/boardy" className="text-landing-primary hover:underline">
+                <a href="https://github.com/bendusm/boardy" className="text-landing-primary hover:underline">
                   GitHub repository
                 </a>{" "}
                 for implementation details.
@@ -267,34 +267,74 @@ export default function DocsPage() {
           <div className="grid gap-4">
             {[
               {
+                name: "list_boards",
+                description: "List all boards accessible via current token",
+                hint: "Read-only",
+              },
+              {
                 name: "get_board",
                 description: "Get the full board with all columns and cards",
                 hint: "Read-only",
               },
               {
-                name: "list_boards",
-                description: "List all boards you have access to",
+                name: "search_cards",
+                description: "Search and filter cards by column, assignee, priority, status, label, or color",
+                hint: "Read-only",
+              },
+              {
+                name: "list_users",
+                description: "Get board members and AI Assistant with their roles and IDs",
                 hint: "Read-only",
               },
               {
                 name: "create_card",
-                description: "Create a new card in a specific column",
+                description: "Create a new card with title, description, and priority",
                 hint: "Creates content",
               },
               {
                 name: "update_card",
-                description: "Update card title, description, or priority",
+                description: "Update title, description, priority, status, color, assignee, due date, or labels",
                 hint: "Modifies content",
               },
               {
                 name: "move_card",
-                description: "Move a card to a different column or position",
+                description: "Move a card to a different column",
                 hint: "Modifies content",
               },
               {
                 name: "add_comment",
                 description: "Add a comment to a card",
                 hint: "Creates content",
+              },
+              {
+                name: "attach_file",
+                description: "Attach a file to a card via URL",
+                hint: "Creates content",
+              },
+              {
+                name: "close_card",
+                description: "Mark a card as done, optionally with a reason comment",
+                hint: "Modifies content",
+              },
+              {
+                name: "archive_card",
+                description: "Soft-delete a card (can be restored)",
+                hint: "Modifies content",
+              },
+              {
+                name: "duplicate_card",
+                description: "Copy a card to the same or a different column",
+                hint: "Creates content",
+              },
+              {
+                name: "delete_card",
+                description: "Permanently delete a card",
+                hint: "Destructive",
+              },
+              {
+                name: "delete_board",
+                description: "Permanently delete a board (owner only)",
+                hint: "Destructive",
               },
             ].map((tool) => (
               <div
@@ -351,8 +391,8 @@ export default function DocsPage() {
                 <div>
                   <strong className="text-landing-on-background">Board-scoped tokens</strong>
                   <p className="text-sm">
-                    Each MCP connection is limited to a single board. AI assistants cannot
-                    access other boards without explicit authorization.
+                    Each MCP connection is scoped to boards you explicitly authorize.
+                    Manage board access anytime from Account Settings.
                   </p>
                 </div>
               </li>
