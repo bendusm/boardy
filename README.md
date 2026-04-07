@@ -118,6 +118,27 @@ Once connected, interact with your board naturally:
 
 All tools include MCP annotations (`readOnlyHint`, `destructiveHint`) for client safety controls.
 
+## AI Workflow
+
+The AI assistant follows these rules automatically:
+
+| Trigger | Action |
+|---------|--------|
+| Task discussed | Check if card exists, create if not |
+| Task completed | `close_card` + `move_card` to Done |
+| Blocker found | `add_comment` + `update_card(status="blocked")` |
+| Git push/merge | Close related card and move to Done |
+
+**Board Structure:**
+- **Backlog** — new tasks (default for `create_card`)
+- **In Progress** — work started
+- **Review** — awaiting review
+- **Done** — completed
+
+**Assignees:**
+- Use `assignee_id="ai-agent"` for AI tasks
+- Use `list_users` to get valid user IDs
+
 ## Security
 
 - **OAuth 2.1 with PKCE**: RFC-compliant authorization
