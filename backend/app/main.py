@@ -75,7 +75,7 @@ app.include_router(oauth_router, tags=["oauth-mcp"])  # /authorize, /token for M
 app.mount("/mcp", mcp_app)
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health(session: Session = Depends(get_session)):
     """Health check endpoint with database connectivity verification."""
     try:
