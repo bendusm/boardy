@@ -102,19 +102,22 @@ Once connected, interact with your board naturally:
 
 | Tool | Type | Description |
 |------|------|-------------|
+| Tool | Type | Description |
+|------|------|-------------|
 | `list_boards` | Read | Get all accessible boards |
 | `get_board` | Read | Get full board with columns and cards |
-| `search_cards` | Read | Search and filter cards |
-| `list_users` | Read | Get board members |
-| `create_card` | Write | Create a new card |
-| `update_card` | Write | Update card details |
+| `search_cards` | Read | Search and filter cards by column, assignee, priority, status, label, color |
+| `list_users` | Read | Get board members and AI Assistant (use IDs for assignee) |
+| `create_card` | Write | Create a new card with title, description, priority |
+| `update_card` | Write | Update title, description, priority, status, color, assignee, due date, labels |
 | `move_card` | Write | Move card between columns |
 | `add_comment` | Write | Add a comment to a card |
-| `close_card` | Write | Mark card as completed |
-| `archive_card` | Write | Archive a card |
-| `duplicate_card` | Write | Copy a card |
+| `attach_file` | Write | Attach a file to a card via URL |
+| `close_card` | Write | Mark card as done (optionally with reason comment) |
+| `archive_card` | Write | Soft-delete a card (can be restored) |
+| `duplicate_card` | Write | Copy a card to same or different column |
 | `delete_card` | Destructive | Permanently delete a card |
-| `delete_board` | Destructive | Permanently delete a board |
+| `delete_board` | Destructive | Permanently delete a board (owner only) |
 
 All tools include MCP annotations (`readOnlyHint`, `destructiveHint`) for client safety controls.
 
@@ -142,14 +145,14 @@ The AI assistant follows these rules automatically:
 ## Security
 
 - **OAuth 2.1 with PKCE**: RFC-compliant authorization
-- **Board Isolation**: Each token scoped to single board
+- **Board Isolation**: Each token scoped to selected boards (manageable from Account settings)
 - **Rate Limiting**: Protection against abuse
 - **GDPR Compliant**: Data stored in EU (Germany)
 
 ## Self-Hosting
 
 ```bash
-git clone https://github.com/alivik/boardy.git
+git clone https://github.com/bendusm/boardy.git
 cd boardy
 cp .env.prod.example .env.prod
 # Edit .env.prod with your secrets
@@ -177,7 +180,7 @@ docker compose -f docker-compose.prod.yml up -d
 ## Support
 
 - **Email**: contact@alivik.io
-- **Issues**: [GitHub Issues](https://github.com/alivik/boardy/issues)
+- **Issues**: [GitHub Issues](https://github.com/bendusm/boardy/issues)
 
 ## Tech Stack
 

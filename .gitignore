@@ -36,6 +36,9 @@ dist/
 CLAUDE.md
 CLAUDE.local.md
 
+# Server-specific scripts
+healthcheck.sh
+
 # Internal docs
 ANTHROPIC_SUBMISSION.md
 
