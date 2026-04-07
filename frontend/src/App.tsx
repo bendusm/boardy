@@ -30,10 +30,16 @@ function AuthLoader({ children }: { children: React.ReactNode }) {
     if (!csrfToken) {
       authApi.me()
         .then(({ data }) => {
-          // Cookie is valid, but we need a new CSRF token
-          // For now, just set user - CSRF will be set on next login
-          // This is a fallback for page refresh
-          setAuth(data, sessionStorage.getItem("boardy_csrf") || "");
+          // Read CSRF token from cookie (set by social auth or regular login)
+          const csrfFromCookie = document.cookie
+            .split("; ")
+            .find((c) => c.startsWith("boardy_csrf="))
+            ?.split("=")[1] || "";
+          const restoredCsrf = sessionStorage.getItem("boardy_csrf") || csrfFromCookie;
+          if (restoredCsrf) {
+            sessionStorage.setItem("boardy_csrf", restoredCsrf);
+          }
+          setAuth(data, restoredCsrf);
         })
         .catch(() => {
           // No valid session

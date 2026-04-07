@@ -1,9 +1,166 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, LayoutDashboard, Trash2, Loader2, AlertTriangle, Download } from "lucide-react";
-import { authApi } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, LayoutDashboard, Trash2, Loader2, AlertTriangle, Download, Plug, Plus, X } from "lucide-react";
+import { authApi, mcpApi, boardsApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
+
+function MCPConnectionsSection() {
+  const qc = useQueryClient();
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [selectedBoard, setSelectedBoard] = useState("");
+
+  const { data: connections, isLoading } = useQuery({
+    queryKey: ["mcp-connections"],
+    queryFn: () => mcpApi.listConnections().then((r) => r.data),
+  });
+
+  const { data: boards } = useQuery({
+    queryKey: ["boards"],
+    queryFn: () => boardsApi.list().then((r) => r.data),
+  });
+
+  const addBoardMutation = useMutation({
+    mutationFn: ({ connId, boardId }: { connId: string; boardId: string }) =>
+      mcpApi.addBoard(connId, boardId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mcp-connections"] });
+      setAddingTo(null);
+      setSelectedBoard("");
+    },
+  });
+
+  const removeBoardMutation = useMutation({
+    mutationFn: ({ connId, boardId }: { connId: string; boardId: string }) =>
+      mcpApi.removeBoard(connId, boardId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["mcp-connections"] }),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (connId: string) => mcpApi.revokeConnection(connId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["mcp-connections"] }),
+  });
+
+  if (isLoading) return null;
+
+  const connectionList = connections || [];
+
+  return (
+    <div className="bg-white rounded-2xl shadow-startup border border-landing-outline-variant/10 p-6 mb-8">
+      <h2 className="font-semibold text-lg mb-2 flex items-center gap-2">
+        <Plug size={20} />
+        MCP Connections
+      </h2>
+      <p className="text-sm text-landing-secondary mb-4">
+        Manage which boards are accessible via Claude Desktop and other MCP clients.
+      </p>
+
+      {connectionList.length === 0 ? (
+        <p className="text-sm text-landing-secondary bg-landing-background rounded-xl p-4">
+          No active MCP connections. Connect via Claude Desktop to get started.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {connectionList.map((conn: any) => {
+            const connBoardIds = conn.boards.map((b: any) => b.id);
+            const availableBoards = (boards || []).filter(
+              (b: any) => !connBoardIds.includes(b.id)
+            );
+
+            return (
+              <div
+                key={conn.id}
+                className="border border-landing-outline-variant/20 rounded-xl p-4"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium">
+                    Connection
+                  </span>
+                  <button
+                    onClick={() => revokeMutation.mutate(conn.id)}
+                    className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    Revoke
+                  </button>
+                </div>
+
+                <div className="space-y-2 mb-3">
+                  {conn.boards.map((board: any) => (
+                    <div
+                      key={board.id}
+                      className="flex items-center justify-between bg-landing-background rounded-lg px-3 py-2"
+                    >
+                      <span className="text-sm">{board.name}</span>
+                      {conn.boards.length > 1 && (
+                        <button
+                          onClick={() =>
+                            removeBoardMutation.mutate({
+                              connId: conn.id,
+                              boardId: board.id,
+                            })
+                          }
+                          className="text-landing-secondary hover:text-red-500 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {addingTo === conn.id ? (
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedBoard}
+                      onChange={(e) => setSelectedBoard(e.target.value)}
+                      className="flex-1 text-sm px-3 py-2 border border-landing-outline-variant/30 rounded-lg bg-white"
+                    >
+                      <option value="">Select a board...</option>
+                      {availableBoards.map((b: any) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() =>
+                        selectedBoard &&
+                        addBoardMutation.mutate({
+                          connId: conn.id,
+                          boardId: selectedBoard,
+                        })
+                      }
+                      disabled={!selectedBoard || addBoardMutation.isPending}
+                      className="px-3 py-2 bg-landing-primary text-white text-sm rounded-lg disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => setAddingTo(null)}
+                      className="px-3 py-2 text-sm text-landing-secondary hover:bg-gray-100 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  availableBoards.length > 0 && (
+                    <button
+                      onClick={() => setAddingTo(conn.id)}
+                      className="flex items-center gap-1 text-sm text-landing-primary hover:underline"
+                    >
+                      <Plus size={14} />
+                      Add board
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AccountPage() {
   const navigate = useNavigate();
@@ -96,6 +253,9 @@ export default function AccountPage() {
             </div>
           </div>
         </div>
+
+        {/* MCP Connections */}
+        <MCPConnectionsSection />
 
         {/* Data Export (GDPR) */}
         <div className="bg-white rounded-2xl shadow-startup border border-landing-outline-variant/10 p-6 mb-8">

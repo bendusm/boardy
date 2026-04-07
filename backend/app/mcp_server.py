@@ -83,13 +83,29 @@ mcp = FastMCP(
 class MCPContext:
     """Context extracted from OAuth token."""
     user_id: str
-    board_id: str
-    role: BoardRole
+    board_ids: list[str]
     scopes: list[str]
+    _session_roles: dict  # board_id -> role cache
+
+    @property
+    def board_id(self) -> str:
+        """Primary board (backward compat)."""
+        return self.board_ids[0] if self.board_ids else ""
+
+    def get_role(self, board_id: str) -> BoardRole | None:
+        return self._session_roles.get(board_id)
+
+    def check_board_access(self, board_id: str) -> BoardRole:
+        if board_id not in self.board_ids:
+            raise ValueError(f"Board {board_id} not accessible with this token")
+        role = self.get_role(board_id)
+        if not role:
+            raise ValueError(f"No access to board {board_id}")
+        return role
 
 
 def get_mcp_context() -> MCPContext:
-    """Extract user_id, board_id, role, and scopes from Bearer token."""
+    """Extract user_id, board_ids, and scopes from Bearer token."""
     request = get_http_request()
     auth_header = request.headers.get("authorization", "")
 
@@ -109,25 +125,32 @@ def get_mcp_context() -> MCPContext:
         if not oauth_token:
             raise ValueError("Invalid or expired token")
 
-        # Get user's role on the board
-        role = service.get_user_board_role(session, oauth_token.board_id, oauth_token.user_id)
-        if not role:
-            raise ValueError("No access to this board")
+        board_ids = oauth_token.get_board_ids()
 
-        # Parse scopes from token
+        # Get user's role on each board
+        roles = {}
+        for bid in board_ids:
+            role = service.get_user_board_role(session, bid, oauth_token.user_id)
+            if role:
+                roles[bid] = role
+
+        if not roles:
+            raise ValueError("No access to any boards")
+
         scopes = oauth_token.scope.split() if oauth_token.scope else []
 
         return MCPContext(
             user_id=oauth_token.user_id,
-            board_id=oauth_token.board_id,
-            role=role,
+            board_ids=list(roles.keys()),
             scopes=scopes,
+            _session_roles=roles,
         )
 
 
-def require_editor(ctx: MCPContext) -> None:
-    """Raise if user is not at least editor."""
-    if ctx.role == BoardRole.viewer:
+def require_editor(ctx: MCPContext, board_id: str) -> None:
+    """Raise if user is not at least editor on the given board."""
+    role = ctx.get_role(board_id)
+    if role == BoardRole.viewer:
         raise ValueError("Viewers cannot perform this action")
 
 
@@ -143,16 +166,17 @@ def require_write_scope(ctx: MCPContext) -> None:
 def list_boards() -> list[dict]:
     """List boards accessible via current token.
 
-    Returns only the board this token is scoped to (for security isolation).
+    Returns all boards this token is authorized for.
     """
     ctx = get_mcp_context()
     with Session(engine) as session:
-        # Security: Only return the board this token is authorized for
-        board_result = service.get_board_with_access(session, ctx.board_id, ctx.user_id)
-        if not board_result:
-            return []
-        board, _ = board_result
-        return [{"id": board.id, "name": board.name, "slug": board.slug}]
+        results = []
+        for bid in ctx.board_ids:
+            board_result = service.get_board_with_access(session, bid, ctx.user_id)
+            if board_result:
+                board, _ = board_result
+                results.append({"id": board.id, "name": board.name, "slug": board.slug})
+        return results
 
 
 @mcp.tool(annotations={"readOnlyHint": True})
@@ -165,11 +189,8 @@ def get_board(board_id: str) -> dict:
     Returns the complete board structure with nested columns and cards.
     """
     ctx = get_mcp_context()
+    ctx.check_board_access(board_id)
     with Session(engine) as session:
-        # Security: Verify board_id matches token scope
-        if board_id != ctx.board_id:
-            raise ValueError(f"Board {board_id} not accessible with this token")
-
         board_result = service.get_board_with_access(session, board_id, ctx.user_id)
         if not board_result:
             raise ValueError(f"Board {board_id} not found or not accessible")
@@ -189,13 +210,10 @@ def delete_board(board_id: str) -> dict:
     Returns confirmation of deletion.
     """
     ctx = get_mcp_context()
+    role = ctx.check_board_access(board_id)
     with Session(engine) as session:
-        # Security: Verify board_id matches token scope
-        if board_id != ctx.board_id:
-            raise ValueError(f"Board {board_id} not accessible with this token")
-
         # Security: Only owners can delete boards
-        if ctx.role != BoardRole.owner:
+        if role != BoardRole.owner:
             raise ValueError("Only board owners can delete boards")
 
         require_write_scope(ctx)
@@ -235,13 +253,10 @@ def create_card(
     Returns the created card details.
     """
     ctx = get_mcp_context()
-    require_editor(ctx)
+    ctx.check_board_access(board_id)
+    require_editor(ctx, board_id)
     require_write_scope(ctx)
     with Session(engine) as session:
-        # Security: Verify board_id matches token scope
-        if board_id != ctx.board_id:
-            raise ValueError(f"Board {board_id} not accessible with this token")
-
         board_result = service.get_board_with_access(session, board_id, ctx.user_id)
         if not board_result:
             raise ValueError(f"Board {board_id} not found or not accessible")
@@ -302,16 +317,14 @@ def update_card(
     from datetime import datetime as dt
 
     ctx = get_mcp_context()
-    require_editor(ctx)
-    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        # Security: Verify card belongs to token-scoped board
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
+        require_editor(ctx, card.board_id)
+        require_write_scope(ctx)
 
         # Handle special cases
         update_kwargs = {}
@@ -348,16 +361,14 @@ def move_card(card_id: str, to_column_id: str) -> dict:
     Returns the moved card details.
     """
     ctx = get_mcp_context()
-    require_editor(ctx)
-    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        # Security: Verify card belongs to token-scoped board
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
+        require_editor(ctx, card.board_id)
+        require_write_scope(ctx)
 
         # Security: Verify target column belongs to the same board
         columns = service.get_columns(session, card.board_id)
@@ -391,9 +402,7 @@ def add_comment(card_id: str, text: str) -> dict:
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        # Security: Verify card belongs to token-scoped board
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
 
         board_result = service.get_board_with_access(session, card.board_id, ctx.user_id)
         if not board_result:
@@ -426,16 +435,14 @@ def attach_file(card_id: str, file_url: str, filename: str) -> dict:
     Returns the created attachment details.
     """
     ctx = get_mcp_context()
-    require_editor(ctx)
-    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        # Security: Verify card belongs to token-scoped board
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
+        require_editor(ctx, card.board_id)
+        require_write_scope(ctx)
 
         attachment = Attachment(
             card_id=card_id,
@@ -469,16 +476,14 @@ def close_card(card_id: str, reason: Optional[str] = None) -> dict:
     Returns the closed card details.
     """
     ctx = get_mcp_context()
-    require_editor(ctx)
-    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        # Security: Verify card belongs to token-scoped board
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
+        require_editor(ctx, card.board_id)
+        require_write_scope(ctx)
 
         closed = service.close_card(session, card, reason=reason)
         logger.info(f"MCP closed card {card_id}")
@@ -497,16 +502,14 @@ def delete_card(card_id: str) -> dict:
     Returns confirmation of deletion.
     """
     ctx = get_mcp_context()
-    require_editor(ctx)
-    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        # Security: Verify card belongs to token-scoped board
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
+        require_editor(ctx, card.board_id)
+        require_write_scope(ctx)
 
         card_title = card.title
         service.delete_card(session, card)
@@ -530,15 +533,14 @@ def archive_card(card_id: str) -> dict:
     Returns the archived card details.
     """
     ctx = get_mcp_context()
-    require_editor(ctx)
-    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
+        require_editor(ctx, card.board_id)
+        require_write_scope(ctx)
 
         archived = service.archive_card(session, card)
         logger.info(f"MCP archived card {card_id}")
@@ -558,15 +560,14 @@ def duplicate_card(card_id: str, to_column_id: Optional[str] = None) -> dict:
     Returns the new card details.
     """
     ctx = get_mcp_context()
-    require_editor(ctx)
-    require_write_scope(ctx)
     with Session(engine) as session:
         card = service.get_card(session, card_id)
         if not card:
             raise ValueError(f"Card {card_id} not found")
 
-        if card.board_id != ctx.board_id:
-            raise ValueError("Card not accessible with this token")
+        ctx.check_board_access(card.board_id)
+        require_editor(ctx, card.board_id)
+        require_write_scope(ctx)
 
         new_card = service.duplicate_card(session, card, to_column_id)
         logger.info(f"MCP duplicated card {card_id} -> {new_card.id}")
@@ -601,11 +602,8 @@ def search_cards(
     Returns list of matching cards.
     """
     ctx = get_mcp_context()
+    ctx.check_board_access(board_id)
     with Session(engine) as session:
-        # Security: Verify board_id matches token scope
-        if board_id != ctx.board_id:
-            raise ValueError(f"Board {board_id} not accessible with this token")
-
         board_result = service.get_board_with_access(session, board_id, ctx.user_id)
         if not board_result:
             raise ValueError(f"Board {board_id} not found or not accessible")
@@ -638,10 +636,8 @@ def list_users(board_id: str) -> list[dict]:
     Returns list of users with id, name, email, and role.
     """
     ctx = get_mcp_context()
+    ctx.check_board_access(board_id)
     with Session(engine) as session:
-        if board_id != ctx.board_id:
-            raise ValueError(f"Board {board_id} not accessible with this token")
-
         # Get all board members
         from app.auth.models import User
         members = service.get_board_members(session, board_id)

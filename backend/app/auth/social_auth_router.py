@@ -3,6 +3,7 @@
 import secrets
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
@@ -50,13 +51,35 @@ def _verify_state(state: str) -> dict | None:
 
 
 @router.get("/github")
-def github_login():
+def github_login(
+    oauth_client_id: Optional[str] = Query(None),
+    oauth_redirect_uri: Optional[str] = Query(None),
+    oauth_response_type: Optional[str] = Query(None),
+    oauth_state: Optional[str] = Query(None),
+    oauth_scope: Optional[str] = Query(None),
+    oauth_code_challenge: Optional[str] = Query(None),
+    oauth_code_challenge_method: Optional[str] = Query(None),
+):
     """Redirect to GitHub OAuth authorization."""
     if not settings.github_client_id:
         raise HTTPException(status_code=503, detail="GitHub OAuth not configured")
 
     state = _generate_state()
-    _store_state(state, {"provider": "github"})
+    state_data = {"provider": "github"}
+
+    # Preserve MCP OAuth flow params if present
+    if oauth_client_id:
+        state_data["oauth_flow"] = {
+            "client_id": oauth_client_id,
+            "redirect_uri": oauth_redirect_uri,
+            "response_type": oauth_response_type,
+            "state": oauth_state,
+            "scope": oauth_scope,
+            "code_challenge": oauth_code_challenge,
+            "code_challenge_method": oauth_code_challenge_method,
+        }
+
+    _store_state(state, state_data)
 
     params = {
         "client_id": settings.github_client_id,
@@ -160,8 +183,33 @@ def github_callback(
         session.commit()
         session.refresh(user)
 
-    # Create JWT and redirect to frontend
+    # Create JWT and set cookies
     token = create_access_token(user.id)
+
+    # If this was part of an MCP OAuth flow, redirect back to authorize with user context
+    oauth_flow = state_data.get("oauth_flow")
+    if oauth_flow and oauth_flow.get("client_id"):
+        from .oauth_router import create_session_token
+        session_token = create_session_token(user.id)
+        redirect_params = {
+            "client_id": oauth_flow["client_id"],
+            "redirect_uri": oauth_flow["redirect_uri"],
+            "response_type": oauth_flow["response_type"],
+            "state": oauth_flow["state"],
+            "scope": oauth_flow["scope"],
+            "code_challenge": oauth_flow["code_challenge"],
+            "code_challenge_method": oauth_flow["code_challenge_method"],
+            "user_id": user.id,
+            "session_token": session_token,
+        }
+        response = RedirectResponse(
+            url=f"{settings.app_url}/auth/authorize/select-board?{urlencode(redirect_params)}",
+            status_code=302,
+        )
+        set_auth_cookies(response, token)
+        logger.info(f"GitHub login successful for user {user.id} (MCP OAuth flow)")
+        return response
+
     response = RedirectResponse(url=f"{settings.app_url}/dashboard", status_code=302)
     set_auth_cookies(response, token)
 
@@ -173,13 +221,35 @@ def github_callback(
 
 
 @router.get("/google")
-def google_login():
+def google_login(
+    oauth_client_id: Optional[str] = Query(None),
+    oauth_redirect_uri: Optional[str] = Query(None),
+    oauth_response_type: Optional[str] = Query(None),
+    oauth_state: Optional[str] = Query(None),
+    oauth_scope: Optional[str] = Query(None),
+    oauth_code_challenge: Optional[str] = Query(None),
+    oauth_code_challenge_method: Optional[str] = Query(None),
+):
     """Redirect to Google OAuth authorization."""
     if not settings.google_client_id:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
     state = _generate_state()
-    _store_state(state, {"provider": "google"})
+    state_data = {"provider": "google"}
+
+    # Preserve MCP OAuth flow params if present
+    if oauth_client_id:
+        state_data["oauth_flow"] = {
+            "client_id": oauth_client_id,
+            "redirect_uri": oauth_redirect_uri,
+            "response_type": oauth_response_type,
+            "state": oauth_state,
+            "scope": oauth_scope,
+            "code_challenge": oauth_code_challenge,
+            "code_challenge_method": oauth_code_challenge_method,
+        }
+
+    _store_state(state, state_data)
 
     params = {
         "client_id": settings.google_client_id,
@@ -268,8 +338,33 @@ def google_callback(
         session.commit()
         session.refresh(user)
 
-    # Create JWT and redirect to frontend
+    # Create JWT and set cookies
     token = create_access_token(user.id)
+
+    # If this was part of an MCP OAuth flow, redirect back to authorize with user context
+    oauth_flow = state_data.get("oauth_flow")
+    if oauth_flow and oauth_flow.get("client_id"):
+        from .oauth_router import create_session_token
+        session_token = create_session_token(user.id)
+        redirect_params = {
+            "client_id": oauth_flow["client_id"],
+            "redirect_uri": oauth_flow["redirect_uri"],
+            "response_type": oauth_flow["response_type"],
+            "state": oauth_flow["state"],
+            "scope": oauth_flow["scope"],
+            "code_challenge": oauth_flow["code_challenge"],
+            "code_challenge_method": oauth_flow["code_challenge_method"],
+            "user_id": user.id,
+            "session_token": session_token,
+        }
+        response = RedirectResponse(
+            url=f"{settings.app_url}/auth/authorize/select-board?{urlencode(redirect_params)}",
+            status_code=302,
+        )
+        set_auth_cookies(response, token)
+        logger.info(f"Google login successful for user {user.id} (MCP OAuth flow)")
+        return response
+
     response = RedirectResponse(url=f"{settings.app_url}/dashboard", status_code=302)
     set_auth_cookies(response, token)
 

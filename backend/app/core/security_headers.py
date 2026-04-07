@@ -39,20 +39,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "max-age=31536000; includeSubDomains"
             )
 
+        # Prevent caching of auth pages
+        if request.url.path.startswith("/auth/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+
         # Content Security Policy - protection against XSS and injection attacks
         parsed_url = urlparse(settings.app_url)
         domain = parsed_url.netloc or parsed_url.path  # Handle URLs with/without scheme
+        app_url = settings.app_url
+
+        is_auth_path = request.url.path.startswith("/auth/")
+
         csp_directives = [
             "default-src 'self'",
             "script-src 'self'",
-            "style-src 'self' 'unsafe-inline'",  # Tailwind uses inline styles
-            "img-src 'self' data: blob:",  # data: for base64, blob: for uploads
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob:",
             "font-src 'self'",
             f"connect-src 'self' wss://{domain} https://{domain}",
             "frame-ancestors 'none'",
-            "form-action 'self'",
             "base-uri 'self'",
         ]
+        # Only restrict form-action on non-auth pages
+        if not is_auth_path:
+            csp_directives.append("form-action 'self'")
+
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
 
         return response

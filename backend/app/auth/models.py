@@ -65,12 +65,25 @@ class OAuthToken(SQLModel, table=True):
     id: str = Field(default_factory=ulid_field, primary_key=True)
     client_id: str = Field(index=True)
     user_id: str = Field(index=True)
-    board_id: str          # токен привязан к одной доске
+    board_id: str          # primary board (first authorized)
+    allowed_board_ids: Optional[str] = None  # JSON array of all allowed board IDs
     access_token: str = Field(unique=True, index=True)
     refresh_token: Optional[str] = Field(default=None, unique=True, index=True)
     scope: str
     expires_at: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def get_board_ids(self) -> list[str]:
+        """Get all allowed board IDs."""
+        if self.allowed_board_ids:
+            import json
+            return json.loads(self.allowed_board_ids)
+        return [self.board_id]
+
+    def set_board_ids(self, board_ids: list[str]) -> None:
+        """Set allowed board IDs."""
+        import json
+        self.allowed_board_ids = json.dumps(board_ids)
 
 
 class TokenBlacklist(SQLModel, table=True):

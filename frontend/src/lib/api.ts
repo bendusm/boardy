@@ -94,6 +94,18 @@ export const membersApi = {
     api.delete(`/boards/${boardId}/members/${memberId}`),
 };
 
+// ─── MCP Connections ─────────────────────────────────────────────
+
+export const mcpApi = {
+  listConnections: () => api.get("/mcp/connections"),
+  addBoard: (connectionId: string, boardId: string) =>
+    api.post(`/mcp/connections/${connectionId}/boards`, { board_id: boardId }),
+  removeBoard: (connectionId: string, boardId: string) =>
+    api.delete(`/mcp/connections/${connectionId}/boards/${boardId}`),
+  revokeConnection: (connectionId: string) =>
+    api.delete(`/mcp/connections/${connectionId}`),
+};
+
 // ─── Invites ──────────────────────────────────────────────────────
 
 export const invitesApi = {

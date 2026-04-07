@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, quote
 import secrets
 import hashlib
 import hmac
@@ -286,6 +286,20 @@ LOGIN_PAGE_TEMPLATE = """<!DOCTYPE html>
             <input type="password" id="password" name="password" placeholder="••••••••" required>
             <button type="submit">Sign in</button>
         </form>
+        <div style="margin-top: 24px; text-align: center; position: relative;">
+            <div style="border-top: 1px solid rgba(219,193,185,0.3); margin: 0 20px;"></div>
+            <span style="background: white; padding: 0 16px; position: relative; top: -10px; color: #88726c; font-size: 13px;">or continue with</span>
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 4px;">
+            <a href="/api/v1/auth/social/github?oauth_client_id={client_id}&oauth_redirect_uri={redirect_uri_encoded}&oauth_response_type={response_type}&oauth_state={state}&oauth_scope={scope_encoded}&oauth_code_challenge={code_challenge}&oauth_code_challenge_method={code_challenge_method}" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border:1px solid rgba(219,193,185,0.3); border-radius:12px; text-decoration:none; color:#1a1c1b; font-weight:600; font-size:14px; transition:all 0.2s; background:#f4f3f1;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub
+            </a>
+            <a href="/api/v1/auth/social/google?oauth_client_id={client_id}&oauth_redirect_uri={redirect_uri_encoded}&oauth_response_type={response_type}&oauth_state={state}&oauth_scope={scope_encoded}&oauth_code_challenge={code_challenge}&oauth_code_challenge_method={code_challenge_method}" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border:1px solid rgba(219,193,185,0.3); border-radius:12px; text-decoration:none; color:#1a1c1b; font-weight:600; font-size:14px; transition:all 0.2s; background:#f4f3f1;">
+                <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                Google
+            </a>
+        </div>
     </div>
 </body>
 </html>"""
@@ -456,7 +470,7 @@ BOARD_SELECTION_TEMPLATE = """<!DOCTYPE html>
     <div class="card">
         <h2>Authorize access</h2>
         <p class="scope"><strong>{client_name}</strong> is requesting <code>{scope}</code></p>
-        <form method="POST">
+        <form method="POST" action="/auth/authorize">
             <input type="hidden" name="client_id" value="{client_id}">
             <input type="hidden" name="redirect_uri" value="{redirect_uri}">
             <input type="hidden" name="response_type" value="{response_type}">
@@ -715,12 +729,78 @@ def authorize_get(
         client_id=client_id,
         client_name=html.escape(client.client_name),
         redirect_uri=redirect_uri,
+        redirect_uri_encoded=quote(redirect_uri, safe=""),
+        response_type=response_type,
+        state=state,
+        scope=scope,
+        scope_encoded=quote(scope, safe=""),
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method,
+        error_html="",
+    ))
+
+
+@oauth_router.get("/authorize/select-board", response_class=HTMLResponse)
+def authorize_select_board(
+    request: Request,
+    client_id: str = Query(...),
+    redirect_uri: str = Query(...),
+    response_type: str = Query(...),
+    state: str = Query(...),
+    code_challenge: str = Query(...),
+    code_challenge_method: str = Query(...),
+    scope: str = Query("board:read board:write"),
+    user_id: str = Query(...),
+    session_token: str = Query(...),
+    session: Session = Depends(get_session),
+):
+    """Display board selection after social auth login."""
+    # Verify session token
+    if not verify_session_token(session_token, user_id):
+        return oauth_error_response("access_denied", "Invalid or expired session", 400)
+
+    # Validate client
+    client = session.exec(
+        select(OAuthClient).where(OAuthClient.client_id == client_id)
+    ).first()
+    if not client:
+        return oauth_error_response("invalid_client", "Unknown client_id", 400)
+
+    # Validate redirect_uri
+    registered_uris = json.loads(client.redirect_uris)
+    if redirect_uri not in registered_uris:
+        return oauth_error_response("invalid_request", "redirect_uri not registered", 400)
+
+    # Show board selection
+    boards_with_roles = get_boards(session, user_id)
+    if not boards_with_roles:
+        boards_html = '<p class="no-boards">You have no boards. Create one first.</p>'
+    else:
+        boards_html = ""
+        for i, (board, role) in enumerate(boards_with_roles):
+            checked = "checked" if i == 0 else ""
+            boards_html += f'''
+            <label class="board-option">
+                <input type="radio" name="board_id" value="{html.escape(board.id)}" {checked}>
+                <span class="board-name">{html.escape(board.name)}</span>
+            </label>
+            '''
+
+    # Generate fresh session token for the form POST
+    new_session_token = create_session_token(user_id)
+
+    return HTMLResponse(BOARD_SELECTION_TEMPLATE.format(
+        client_id=client_id,
+        client_name=html.escape(client.client_name),
+        redirect_uri=redirect_uri,
         response_type=response_type,
         state=state,
         scope=scope,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
-        error_html="",
+        user_id=user_id,
+        session_token=new_session_token,
+        boards_html=boards_html,
     ))
 
 
@@ -777,9 +857,11 @@ def authorize_post(
                 client_id=client_id,
                 client_name=html.escape(client.client_name),
                 redirect_uri=redirect_uri,
+                redirect_uri_encoded=quote(redirect_uri, safe=""),
                 response_type=response_type,
                 state=state,
                 scope=scope,
+                scope_encoded=quote(scope, safe=""),
                 code_challenge=code_challenge,
                 code_challenge_method=code_challenge_method,
                 error_html='<div class="error">Invalid email or password</div>',

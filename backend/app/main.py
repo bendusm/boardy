@@ -15,6 +15,7 @@ from app.auth.social_auth_router import router as social_auth_router
 from app.boards.router import router as boards_router
 from app.boards.members_router import router as members_router
 from app.mcp_server import mcp
+from app.mcp_router import router as mcp_api_router
 
 
 class MCPAuthMiddleware(BaseHTTPMiddleware):
@@ -30,8 +31,8 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
         return response
 
-# Get MCP HTTP app for mounting
-mcp_app = mcp.http_app()
+# Get MCP HTTP app for mounting - path="/" so endpoint is at mount point, not /mcp/mcp
+mcp_app = mcp.http_app(path="/")
 
 
 @asynccontextmanager
@@ -63,6 +64,7 @@ app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(social_auth_router, prefix="/api/v1/auth", tags=["social-auth"])
 app.include_router(boards_router, prefix="/api/v1", tags=["boards"])
 app.include_router(members_router, prefix="/api/v1", tags=["members"])
+app.include_router(mcp_api_router, prefix="/api/v1", tags=["mcp-management"])
 
 # OAuth 2.1 endpoints (both /auth/* for web UI and /* for MCP)
 app.include_router(discovery_router)  # /.well-known/oauth-authorization-server

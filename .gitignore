@@ -10,6 +10,8 @@ dist/
 # Environment files (NEVER commit secrets)
 .env
 .env.local
+.env.prod
+.env.staging
 .env.*.local
 *.env
 backend/.env
@@ -29,8 +31,9 @@ dist/
 .idea/
 *.swp
 
-# Claude Code (personal settings)
+# Claude Code (personal/local settings)
 .claude/
+CLAUDE.local.md
 
 # Internal docs
 ANTHROPIC_SUBMISSION.md
