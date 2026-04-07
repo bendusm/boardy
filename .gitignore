@@ -33,6 +33,7 @@ dist/
 
 # Claude Code (personal/local settings)
 .claude/
+CLAUDE.md
 CLAUDE.local.md
 
 # Internal docs
