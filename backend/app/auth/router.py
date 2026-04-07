@@ -170,8 +170,19 @@ def logout(
 
 
 @router.get("/me")
-def me(current_user: User = Depends(get_current_user)):
-    return current_user.to_dict()
+def me(response: Response, current_user: User = Depends(get_current_user)):
+    # Refresh CSRF cookie on session check (ensures social auth users get a valid CSRF token)
+    csrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=csrf_token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=False,
+        secure=not settings.debug,
+        samesite="lax",
+        path="/",
+    )
+    return {**current_user.to_dict(), "csrf_token": csrf_token}
 
 
 @router.get("/export")
