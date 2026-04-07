@@ -225,20 +225,20 @@ export default function LandingPage() {
 
             <div className="bg-white p-8 rounded-3xl shadow-startup border border-landing-outline-variant/10 hover:shadow-startup-hover hover:border-landing-primary/20 transition-all flex flex-col h-full min-h-[280px] lg:translate-y-8">
               <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center mb-12">
-                <GitCommit className="w-6 h-6 text-landing-primary" />
+                <CheckCircle className="w-6 h-6 text-landing-primary" />
               </div>
               <h4 className="text-lg font-bold leading-tight mb-3">
-                Commit Sync
+                Progress Tracking
               </h4>
               <p className="text-sm text-landing-secondary">
-                Tasks are updated or closed as soon as your git commits are
-                detected. No manual clicking.
+                Your AI automatically updates task status based on your
+                conversations and completed work.
               </p>
             </div>
 
             <div className="bg-white p-8 rounded-3xl shadow-startup border border-landing-outline-variant/10 hover:shadow-startup-hover hover:border-landing-primary/20 transition-all flex flex-col h-full min-h-[280px]">
               <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center mb-12">
-                <Terminal className="w-6 h-6 text-landing-primary" />
+                <Globe className="w-6 h-6 text-landing-primary" />
               </div>
               <h4 className="text-lg font-bold leading-tight mb-3">
                 Universal AI Support
@@ -257,8 +257,8 @@ export default function LandingPage() {
                 Community First
               </h4>
               <p className="text-sm text-landing-secondary">
-                Built for the developer community. No complex tiers, just a
-                powerful tool to help you ship.
+                Built for everyone who works with AI. No complex tiers, just a
+                powerful tool to help you get things done.
               </p>
             </div>
           </div>
@@ -271,7 +271,7 @@ export default function LandingPage() {
             <div className="absolute inset-0 flex items-center justify-center px-6">
               <div className="bg-white/95 backdrop-blur-md px-8 md:px-16 py-8 md:py-10 rounded-3xl shadow-2xl text-center max-w-2xl transform group-hover:scale-105 transition-transform duration-700">
                 <span className="font-headline italic text-3xl md:text-5xl block mb-4">
-                  Focus on the code.
+                  Focus on what matters.
                 </span>
                 <p className="text-landing-secondary font-medium uppercase tracking-widest text-xs">
                   Let your AI assistant handle the rest.
