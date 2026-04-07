@@ -1,13 +1,13 @@
 # Boardy
 
-**AI-powered Kanban board with native Claude integration via MCP.**
+**AI-powered Kanban board with MCP integration.**
 
-Boardy is a SaaS Kanban board that connects directly to Claude via the Model Context Protocol (MCP). Once connected, Claude can automatically manage your tasks—creating cards, moving them between columns, and adding comments based on your conversations.
+Boardy is a SaaS Kanban board with a native [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server. Connect any MCP-compatible AI assistant to manage your tasks through natural conversation.
 
 ## Features
 
-- **Native Claude Integration**: Connect your board to Claude Desktop with one click
-- **Automatic Task Management**: Claude creates and updates cards based on your conversations
+- **MCP Server**: Standard MCP protocol — works with any compatible client
+- **Automatic Task Management**: AI creates and updates cards based on your conversations
 - **Real-time Kanban**: Drag-and-drop interface with instant sync
 - **Team Collaboration**: Invite team members with role-based permissions
 - **OAuth 2.1 Security**: Secure authentication with PKCE support
@@ -20,98 +20,132 @@ Boardy is a SaaS Kanban board that connects directly to Claude via the Model Con
 2. Click "Get Started" and create an account
 3. Create your first board
 
-### 2. Connect to Claude
+### 2. Connect Your AI Assistant
 
-1. In Claude Desktop, click "Add Server" in MCP settings
-2. Enter the MCP URL: `https://boardy.alivik.io/mcp`
-3. Complete the OAuth authorization flow
-4. Select which board Claude should manage
+#### Claude Desktop
 
-That's it! Claude now has access to your Kanban board.
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "boardy": {
+      "url": "https://boardy.alivik.io/mcp"
+    }
+  }
+}
+```
+
+#### Claude Code (CLI)
+
+```bash
+claude mcp add boardy --url https://boardy.alivik.io/mcp
+```
+
+#### Any MCP Client
+
+Use these endpoints:
+
+| Endpoint | URL |
+|----------|-----|
+| MCP Server | `https://boardy.alivik.io/mcp` |
+| OAuth Discovery | `https://boardy.alivik.io/.well-known/oauth-authorization-server` |
+| Resource Metadata | `https://boardy.alivik.io/.well-known/oauth-protected-resource` |
+
+The server uses OAuth 2.1 with PKCE. Implement the standard authorization flow:
+1. Register client via `POST /auth/register`
+2. Redirect user to `/auth/authorize` with PKCE challenge
+3. Exchange code for token at `/auth/token`
 
 ## Usage Examples
 
-Once connected, you can interact with your board naturally through Claude:
+Once connected, interact with your board naturally:
 
-### Example 1: Create a New Task
+### Create a Task
 
 **You**: "I need to implement user authentication for the mobile app"
 
-**Claude**: *Creates a card titled "Implement user authentication for mobile app" in your To Do column*
+**AI**: *Creates a card titled "Implement user authentication for mobile app" in your To Do column*
 
-> I've created a new card for the authentication task. Would you like me to add any specific requirements or acceptance criteria?
+> I've created a new card for the authentication task. Would you like me to add any specific requirements?
 
-### Example 2: Check Board Status
+### Check Board Status
 
 **You**: "What tasks are currently in progress?"
 
-**Claude**: *Reads your board via `get_board`*
+**AI**: *Reads your board via `get_board`*
 
 > You have 3 cards in the "In Progress" column:
-> 1. **Fix login bug** (High priority) - assigned to @alice
-> 2. **Update API documentation** - created by Claude
+> 1. **Fix login bug** (High priority)
+> 2. **Update API documentation**
 > 3. **Refactor payment module** - due tomorrow
->
-> Would you like me to update any of these?
 
-### Example 3: Move a Completed Task
+### Move a Completed Task
 
-**You**: "I just finished the login bug fix and pushed the PR"
+**You**: "I just finished the login bug fix"
 
-**Claude**: *Moves the card to Done and adds a comment*
+**AI**: *Moves the card to Done and adds a comment*
 
-> Great work! I've moved "Fix login bug" to Done and added a comment noting the PR was merged. Is there anything blocking the other in-progress tasks?
+> Done! I've moved "Fix login bug" to Done.
 
-### Example 4: Search and Filter Cards
+### Search Cards
 
-**You**: "Show me all high priority tasks assigned to me"
+**You**: "Show me all high priority tasks"
 
-**Claude**: *Uses `search_cards` with filters*
+**AI**: *Uses `search_cards` with filters*
 
-> Found 2 high priority cards assigned to you:
+> Found 2 high priority cards:
 > 1. **Security audit** (In Progress) - due in 3 days
-> 2. **Performance optimization** (To Do) - no due date
->
-> The security audit is approaching its deadline. Want me to add a reminder comment?
+> 2. **Performance optimization** (To Do)
 
-### Example 5: Add Context to a Task
+## MCP Tools
 
-**You**: "Add a note to the API docs card that we need to include the new endpoints from PR #42"
+| Tool | Type | Description |
+|------|------|-------------|
+| `list_boards` | Read | Get all accessible boards |
+| `get_board` | Read | Get full board with columns and cards |
+| `search_cards` | Read | Search and filter cards |
+| `list_users` | Read | Get board members |
+| `create_card` | Write | Create a new card |
+| `update_card` | Write | Update card details |
+| `move_card` | Write | Move card between columns |
+| `add_comment` | Write | Add a comment to a card |
+| `close_card` | Write | Mark card as completed |
+| `archive_card` | Write | Archive a card |
+| `duplicate_card` | Write | Copy a card |
+| `delete_card` | Destructive | Permanently delete a card |
+| `delete_board` | Destructive | Permanently delete a board |
 
-**Claude**: *Adds a comment to the card*
-
-> Done! I've added the following comment to "Update API documentation":
-> "Include new endpoints from PR #42: /api/v1/users/export and /api/v1/webhooks"
-
-## MCP Tools Available
-
-| Tool | Description |
-|------|-------------|
-| `list_boards` | Get all boards you have access to |
-| `get_board` | Get full board with columns and cards |
-| `create_card` | Create a new card |
-| `update_card` | Update card title, description, priority, due date |
-| `move_card` | Move card to another column |
-| `add_comment` | Add a comment to a card |
-| `close_card` | Mark a card as completed |
-| `archive_card` | Archive a card |
-| `delete_card` | Permanently delete a card |
-| `duplicate_card` | Create a copy of a card |
-| `search_cards` | Search and filter cards |
-| `list_users` | Get board members |
+All tools include MCP annotations (`readOnlyHint`, `destructiveHint`) for client safety controls.
 
 ## Security
 
-- **OAuth 2.1 with PKCE**: Secure authorization flow
-- **Board Isolation**: Each OAuth token is scoped to a single board
+- **OAuth 2.1 with PKCE**: RFC-compliant authorization
+- **Board Isolation**: Each token scoped to single board
 - **Rate Limiting**: Protection against abuse
 - **GDPR Compliant**: Data stored in EU (Germany)
 
-## API Documentation
+## Self-Hosting
 
-- OAuth Discovery: `GET /.well-known/oauth-authorization-server`
-- Protected Resource Metadata: `GET /.well-known/oauth-protected-resource`
-- MCP Endpoint: `POST /mcp`
+```bash
+git clone https://github.com/alivik/boardy.git
+cd boardy
+cp .env.prod.example .env.prod
+# Edit .env.prod with your secrets
+docker compose -f docker-compose.prod.yml up -d
+```
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /mcp` | MCP server (JSON-RPC) |
+| `GET /.well-known/oauth-authorization-server` | OAuth 2.0 Discovery (RFC 8414) |
+| `GET /.well-known/oauth-protected-resource` | Protected Resource Metadata (RFC 9728) |
+| `POST /auth/register` | Dynamic Client Registration (RFC 7591) |
+| `GET /auth/authorize` | Authorization endpoint |
+| `POST /auth/token` | Token endpoint |
+| `POST /auth/revoke` | Token revocation (RFC 7009) |
 
 ## Privacy & Terms
 
@@ -130,6 +164,10 @@ Once connected, you can interact with your board naturally through Claude:
 - **Frontend**: React 18, TypeScript, TanStack Query, Tailwind CSS
 - **Infrastructure**: Hetzner (EU), Cloudflare
 
+## License
+
+MIT
+
 ---
 
-Made with care by [boardy.ALIVIK](https://alivik.io)
+Made by [boardy.ALIVIK](https://alivik.io)

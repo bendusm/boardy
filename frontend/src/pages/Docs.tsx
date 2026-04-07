@@ -216,6 +216,38 @@ export default function DocsPage() {
                 Or add to your ~/.claude/settings.json manually.
               </p>
             </div>
+
+            {/* Any MCP Client */}
+            <div className="bg-white rounded-2xl p-6 border border-landing-outline-variant/20">
+              <div className="flex items-center gap-2 mb-4">
+                <Zap className="w-5 h-5 text-landing-primary" />
+                <h3 className="text-lg font-bold">Any MCP Client</h3>
+              </div>
+              <p className="text-landing-secondary mb-4">
+                Boardy implements the standard Model Context Protocol. Connect any MCP-compatible client using these endpoints:
+              </p>
+              <div className="space-y-3 mb-4">
+                <div className="flex items-center justify-between bg-landing-surface-container-low rounded-lg p-3">
+                  <span className="text-sm font-medium">MCP Server</span>
+                  <code className="text-xs text-landing-primary">https://boardy.alivik.io/mcp</code>
+                </div>
+                <div className="flex items-center justify-between bg-landing-surface-container-low rounded-lg p-3">
+                  <span className="text-sm font-medium">OAuth Discovery</span>
+                  <code className="text-xs text-landing-primary">/.well-known/oauth-authorization-server</code>
+                </div>
+                <div className="flex items-center justify-between bg-landing-surface-container-low rounded-lg p-3">
+                  <span className="text-sm font-medium">Resource Metadata</span>
+                  <code className="text-xs text-landing-primary">/.well-known/oauth-protected-resource</code>
+                </div>
+              </div>
+              <p className="text-sm text-landing-secondary">
+                Authentication uses OAuth 2.1 with PKCE. See the{" "}
+                <a href="https://github.com/alivik/boardy" className="text-landing-primary hover:underline">
+                  GitHub repository
+                </a>{" "}
+                for implementation details.
+              </p>
+            </div>
           </div>
         </section>
 

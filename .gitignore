@@ -13,6 +13,7 @@ dist/
 .env.*.local
 *.env
 backend/.env
+backend/.env.test
 
 # Node
 node_modules/
@@ -27,6 +28,12 @@ dist/
 .vscode/
 .idea/
 *.swp
+
+# Claude Code (personal settings)
+.claude/
+
+# Internal docs
+ANTHROPIC_SUBMISSION.md
 
 # OS
 .DS_Store
